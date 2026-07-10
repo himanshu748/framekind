@@ -19,7 +19,7 @@ export function MethodSection() {
         </div>
         <div>
           <dt>Same runtime</dt>
-          <dd>ONNX Runtime Web using WASM SIMD and available worker threads.</dd>
+          <dd>ONNX Runtime Web using WASM SIMD and isolation-enabled threads when the host supports them.</dd>
         </div>
         <div>
           <dt>Quality guardrail</dt>

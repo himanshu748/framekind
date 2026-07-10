@@ -2,7 +2,7 @@
 
 Private alt-text drafts, powered on your device.
 
-[**Open the live demo**](https://himanshu748.github.io/framekind/) · [Arm challenge](https://arm-ai-optimization-challenge.devpost.com/) · [Benchmark evidence](submission-assets/benchmark-m4-safari.json)
+[**Open the live demo**](https://framekind-ai.netlify.app/) · [GitHub Pages mirror](https://himanshu748.github.io/framekind/) · [Arm challenge](https://arm-ai-optimization-challenge.devpost.com/) · [Benchmark evidence](submission-assets/benchmark-m4-safari.json)
 
 ![FrameKind running in Safari](submission-assets/framekind-safari-desktop-final.png)
 
@@ -90,6 +90,18 @@ The UI surfaces the median, session-load time, model size, and agreement. Timing
 - Lucide icons and Inter Variable
 
 FrameKind source is MIT licensed. Third-party models, packages, fonts, and icons retain their own licenses.
+
+The model is pinned to Hugging Face revision `e2f9c7673f0fa61849efe2b56a0d7774779ebb9d` so the implementation and recorded weight sizes do not drift with the repository's `main` branch.
+
+## Validate it on Arm64
+
+1. Run `uname -m` and confirm the output is `arm64`.
+2. Run `npm install`, then `npm run dev`.
+3. Open the Vite URL and wait until the bundled sample shows detection boxes and three confident details.
+4. Confirm the editable draft names the detected objects and their coarse positions.
+5. Select **Run benchmark** and leave the tab open while FP32 and UINT8 each complete one warm-up and five measured runs.
+6. Interpret the result as a device-specific tradeoff: lower median latency and weight size are useful only alongside acceptable detection agreement.
+7. Run `npm test` and `npm run build` to validate caption/agreement logic and the production bundle.
 
 ## AI assistance disclosure
 

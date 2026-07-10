@@ -26,4 +26,16 @@ describe("generateAltText", () => {
     );
     expect(text).toContain("No objects were detected");
   });
+
+  it("uses a plural verb when one label has multiple detections", () => {
+    const text = generateAltText(
+      [
+        { label: "person", score: 0.95, box: { xmin: 10, ymin: 0, xmax: 30, ymax: 80 } },
+        { label: "person", score: 0.9, box: { xmin: 60, ymin: 0, xmax: 90, ymax: 80 } },
+      ],
+      100,
+    );
+
+    expect(text).toBe("2 people are visible.");
+  });
 });

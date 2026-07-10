@@ -27,6 +27,7 @@ export default function App() {
   const inputRef = useRef<HTMLInputElement>(null);
   const processedRef = useRef("");
   const copyTimerRef = useRef<number | null>(null);
+  const analysisGenerationRef = useRef(0);
   const { detect, benchmark, progress } = useInferenceWorker();
   const [imageUrl, setImageUrl] = useState(SAMPLE_IMAGE);
   const [imageKey, setImageKey] = useState(0);
@@ -42,6 +43,7 @@ export default function App() {
   const [modelReady, setModelReady] = useState(false);
 
   const resetForImage = useCallback((nextUrl: string) => {
+    analysisGenerationRef.current += 1;
     processedRef.current = "";
     setImageUrl(nextUrl);
     setImageKey((value) => value + 1);
@@ -52,21 +54,24 @@ export default function App() {
     setIsProcessing(true);
   }, []);
 
-  const analyzeImage = useCallback(async (url: string, width: number) => {
+  const analyzeImage = useCallback(async (url: string, width: number, generation: number) => {
+    if (generation !== analysisGenerationRef.current) return;
     setIsProcessing(true);
     setError("");
     try {
       const result = await detect(url, "uint8");
+      if (generation !== analysisGenerationRef.current) return;
       const sorted = [...result.detections].sort((a, b) => b.score - a.score);
       setDetections(sorted);
       setDraft(generateAltText(sorted, width));
       setModelReady(true);
     } catch (reason) {
+      if (generation !== analysisGenerationRef.current) return;
       const message = reason instanceof Error ? reason.message : "Local inference did not finish.";
       setError(message);
       setDraft("");
     } finally {
-      setIsProcessing(false);
+      if (generation === analysisGenerationRef.current) setIsProcessing(false);
     }
   }, [detect]);
 
@@ -75,10 +80,20 @@ export default function App() {
     const fingerprint = `${imageKey}:${imageUrl.length}:${imageUrl.slice(-48)}`;
     if (processedRef.current === fingerprint) return;
     processedRef.current = fingerprint;
-    void analyzeImage(imageUrl, width);
+    void analyzeImage(imageUrl, width, analysisGenerationRef.current);
   }, [analyzeImage, imageKey, imageUrl]);
 
+  const handleImageError = useCallback(() => {
+    analysisGenerationRef.current += 1;
+    processedRef.current = "";
+    setDetections([]);
+    setDraft("");
+    setError("That image could not be decoded. Choose a valid PNG, JPEG, or WebP file.");
+    setIsProcessing(false);
+  }, []);
+
   const handleFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    if (isProcessing || isBenchmarking) return;
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
@@ -95,7 +110,7 @@ export default function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "That image could not be read.");
     }
-  }, [resetForImage]);
+  }, [isBenchmarking, isProcessing, resetForImage]);
 
   const handleCopy = useCallback(async () => {
     if (!draft) return;
@@ -111,15 +126,19 @@ export default function App() {
 
   const handleBenchmark = useCallback(async () => {
     if (isProcessing || isBenchmarking) return;
+    const generation = analysisGenerationRef.current;
     setIsBenchmarking(true);
     setError("");
     try {
-      setBenchmarkResult(await benchmark(imageUrl, 5));
+      const result = await benchmark(imageUrl, 5);
+      if (generation !== analysisGenerationRef.current) return;
+      setBenchmarkResult(result);
       setModelReady(true);
     } catch (reason) {
+      if (generation !== analysisGenerationRef.current) return;
       setError(reason instanceof Error ? reason.message : "The benchmark did not finish.");
     } finally {
-      setIsBenchmarking(false);
+      if (generation === analysisGenerationRef.current) setIsBenchmarking(false);
     }
   }, [benchmark, imageUrl, isBenchmarking, isProcessing]);
 
@@ -129,6 +148,7 @@ export default function App() {
       <main id="workbench">
         <Hero
           inputRef={inputRef}
+          disabled={isProcessing || isBenchmarking}
           onFile={handleFile}
           onSample={() => resetForImage(SAMPLE_IMAGE)}
         />
@@ -143,6 +163,7 @@ export default function App() {
             progress={progress}
             imageKey={imageKey}
             onImageLoad={handleImageLoad}
+            onImageError={handleImageError}
             onToggleBoxes={() => setShowBoxes((value) => !value)}
           />
           <AltTextPanel

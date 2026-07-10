@@ -12,6 +12,7 @@ import type {
 } from "./types";
 
 const MODEL_ID = "Xenova/yolos-tiny";
+const MODEL_REVISION = "e2f9c7673f0fa61849efe2b56a0d7774779ebb9d";
 const MODEL_WEIGHT_MB: Record<ModelDType, number> = {
   fp32: 26.2,
   uint8: 9.51,
@@ -67,6 +68,7 @@ async function loadDetector(
 ): Promise<LoadedDetector> {
   const startedAt = performance.now();
   const created = await pipeline("object-detection", MODEL_ID, {
+    revision: MODEL_REVISION,
     dtype,
     device: "wasm",
     progress_callback: progressReporter(requestId, prefix),
@@ -200,13 +202,16 @@ async function runBenchmark(request: Extract<WorkerRequest, { type: "benchmark" 
   send({ type: "benchmark-result", requestId: request.requestId, result });
 }
 
+let taskQueue = Promise.resolve();
+
 workerScope.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
-  const task = request.type === "detect" ? runDetection(request) : runBenchmark(request);
-  void task.catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : "The local model could not complete this request.";
-    send({ type: "error", requestId: request.requestId, message });
-  });
+  taskQueue = taskQueue
+    .then(() => (request.type === "detect" ? runDetection(request) : runBenchmark(request)))
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "The local model could not complete this request.";
+      send({ type: "error", requestId: request.requestId, message });
+    });
 });
 
 export {};

@@ -18,6 +18,7 @@
   },
   "method": {
     "model": "Xenova/yolos-tiny",
+    "modelRevision": "e2f9c7673f0fa61849efe2b56a0d7774779ebb9d",
     "runtime": "ONNX Runtime Web/WASM through Transformers.js",
     "executionContext": "dedicated Web Worker",
     "cacheState": "both weight variants pre-cached",
@@ -42,4 +43,3 @@
   },
   "caveat": "This is one local observed run, retained as submission evidence. Judges can rerun the benchmark in the app; results vary by device and browser."
 }
-

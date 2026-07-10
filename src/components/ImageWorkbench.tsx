@@ -16,6 +16,7 @@ interface ImageWorkbenchProps {
   progress: { stage: string; progress?: number };
   imageKey: number;
   onImageLoad: (width: number, height: number) => void;
+  onImageError: () => void;
   onToggleBoxes: () => void;
 }
 
@@ -29,6 +30,7 @@ export function ImageWorkbench({
   progress,
   imageKey,
   onImageLoad,
+  onImageError,
   onToggleBoxes,
 }: ImageWorkbenchProps) {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,7 @@ export function ImageWorkbench({
           src={src}
           alt={alt}
           onLoad={(event) => onImageLoad(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
+          onError={onImageError}
         />
         {showBoxes && detections.map((detection, index) => {
           const rawLeft = detection.box.xmin * scale + offsetX;

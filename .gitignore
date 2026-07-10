@@ -8,3 +8,6 @@ vite.config.d.ts
 *.local
 npm-debug.log*
 
+
+# Local Netlify folder
+.netlify

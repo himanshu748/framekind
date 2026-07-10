@@ -3,18 +3,19 @@ import type { ChangeEvent, RefObject } from "react";
 
 interface HeroProps {
   inputRef: RefObject<HTMLInputElement | null>;
+  disabled: boolean;
   onFile: (event: ChangeEvent<HTMLInputElement>) => void;
   onSample: () => void;
 }
 
-export function Hero({ inputRef, onFile, onSample }: HeroProps) {
+export function Hero({ inputRef, disabled, onFile, onSample }: HeroProps) {
   return (
     <section className="hero" aria-labelledby="page-title">
       <div>
         <h1 id="page-title">Describe what matters.</h1>
         <p>Draft useful alt text locally. Your image never leaves this device.</p>
         <div className="hero-actions">
-          <button className="button button-primary" type="button" onClick={() => inputRef.current?.click()}>
+          <button className="button button-primary" type="button" disabled={disabled} onClick={() => inputRef.current?.click()}>
             <Upload aria-hidden="true" />
             Choose image
           </button>
@@ -23,9 +24,10 @@ export function Hero({ inputRef, onFile, onSample }: HeroProps) {
             className="visually-hidden"
             type="file"
             accept="image/png,image/jpeg,image/webp"
+            disabled={disabled}
             onChange={onFile}
           />
-          <button className="button button-secondary" type="button" onClick={onSample}>
+          <button className="button button-secondary" type="button" disabled={disabled} onClick={onSample}>
             <ImagePlus aria-hidden="true" />
             Try sample
           </button>

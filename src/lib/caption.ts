@@ -72,7 +72,8 @@ export function generateAltText(
   );
 
   const subjectPhrase = joinNatural(subjects);
-  const overview = `${subjectPhrase.charAt(0).toUpperCase()}${subjectPhrase.slice(1)} ${subjects.length === 1 ? "is" : "are"} visible.`;
+  const isSingular = ranked.length === 1 && ranked[0][1].length === 1;
+  const overview = `${subjectPhrase.charAt(0).toUpperCase()}${subjectPhrase.slice(1)} ${isSingular ? "is" : "are"} visible.`;
 
   const positions = ranked
     .filter(([, items]) => items.length === 1)

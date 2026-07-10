@@ -55,8 +55,8 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
     <section className="benchmark-panel" id="benchmarks" aria-labelledby="benchmark-heading">
       <h2 id="benchmark-heading">On-device benchmark</h2>
       <div className="benchmark-grid">
-        <ModelColumn label="Full precision" meta="FP32 · 26.2 MB" model={result?.fp32} selected />
-        <ModelColumn label="Optimized" meta="UINT8 · 9.5 MB" model={result?.uint8} />
+        <ModelColumn label="Full precision" meta="FP32 · 26.2 MB" model={result?.fp32} />
+        <ModelColumn label="Optimized" meta="UINT8 · 9.5 MB" model={result?.uint8} selected />
         <button className="button button-primary benchmark-button" type="button" disabled={isRunning || disabled} onClick={onRun}>
           {isRunning ? <RotateCw className="spin" aria-hidden="true" /> : <Play aria-hidden="true" />}
           {isRunning ? "Benchmarking" : "Run benchmark"}
