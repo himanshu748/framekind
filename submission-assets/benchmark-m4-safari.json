@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "project": "FrameKind",
+  "capturedOn": "2026-07-10",
+  "environment": {
+    "device": "MacBook Air",
+    "chip": "Apple M4",
+    "memoryGb": 16,
+    "architecture": "arm64",
+    "operatingSystem": "macOS 26.5.1 (25F80)",
+    "browser": "Safari 26.5 (21624.2.5.11.4)"
+  },
+  "input": {
+    "file": "public/sample-street.png",
+    "widthPx": 1448,
+    "heightPx": 1086,
+    "confidenceThreshold": 0.5
+  },
+  "method": {
+    "model": "Xenova/yolos-tiny",
+    "runtime": "ONNX Runtime Web/WASM through Transformers.js",
+    "executionContext": "dedicated Web Worker",
+    "cacheState": "both weight variants pre-cached",
+    "warmupRunsPerVariant": 1,
+    "measuredRunsPerVariant": 5,
+    "reportedLatency": "median"
+  },
+  "observed": {
+    "fp32": {
+      "weightMb": 26.2,
+      "modelLoadMs": 501,
+      "medianInferenceMs": 24031
+    },
+    "uint8": {
+      "weightMb": 9.51,
+      "modelLoadMs": 2634,
+      "medianInferenceMs": 7016
+    },
+    "medianSpeedRatio": 3.43,
+    "weightReductionPercent": 63.7,
+    "detectionAgreementPercent": 86
+  },
+  "caveat": "This is one local observed run, retained as submission evidence. Judges can rerun the benchmark in the app; results vary by device and browser."
+}
+
