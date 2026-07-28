@@ -48,7 +48,7 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
   const status = isRunning
     ? progress.stage
     : result && winner
-      ? `Fastest configuration holding at least ${Math.round(AGREEMENT_FLOOR * 100)}% agreement: ${winner.label}, ${speedup?.toFixed(2)}× the FP32 WASM reference.`
+      ? `Fastest configuration holding at least ${Math.round(AGREEMENT_FLOOR * 100)}% agreement: ${winner.label}, ${speedup?.toFixed(2)}× the FP32 WASM reference on best-round times.`
       : result
         ? "No configuration met the agreement floor on this device."
         : "Run the sweep to measure every backend and precision this device supports.";
@@ -61,11 +61,12 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
           <p>
             Every configuration runs the same image, threshold, warm-up and run count, and is scored
             against the full-precision WASM reference so speed is never reported without a quality
-            guardrail. Agreement is measured on the image currently loaded, over a handful of boxes,
-            so treat it as a pass or fail signal rather than a precise ranking. Compare median against
-            p95 before trusting any gap: the CPU path in particular moves with whatever else the
-            machine is doing. FrameKind itself runs the fastest configuration that reproduces the
-            reference detections exactly.
+            guardrail. Rounds are interleaved across configurations, so background load and thermal
+            drift hit every row rather than whichever one held the slow window, and ranking uses each
+            configuration's best round because noise only ever adds time. A wide gap between best and
+            p95 means the machine was busy, not that the configuration is erratic. Agreement is
+            measured on the image currently loaded, over a handful of boxes, so treat it as a pass or
+            fail signal rather than a precise ranking.
           </p>
         </div>
         <div className="benchmark-actions">
@@ -97,7 +98,7 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
               <tr>
                 <th scope="col">Configuration</th>
                 <th scope="col">Weights</th>
-                <th scope="col">Load</th>
+                <th scope="col">Best</th>
                 <th scope="col">Median</th>
                 <th scope="col">p95</th>
                 <th scope="col">Agreement</th>
@@ -112,8 +113,8 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
                     {entry.id === winner?.id && <span className="sweep-tag is-best">fastest</span>}
                   </th>
                   <td>{entry.error ? "n/a" : formatBytes(entry.weightBytes)}</td>
-                  <td>{formatMs(entry.loadMs)}</td>
-                  <td>{entry.error ? <span className="sweep-error">{entry.error}</span> : formatMs(entry.medianMs)}</td>
+                  <td>{entry.error ? <span className="sweep-error">{entry.error}</span> : formatMs(entry.minMs)}</td>
+                  <td>{entry.error ? "n/a" : formatMs(entry.medianMs)}</td>
                   <td>{entry.error ? "n/a" : formatMs(entry.p95Ms)}</td>
                   <td>{formatAgreement(entry)}</td>
                 </tr>

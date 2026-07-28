@@ -35,20 +35,26 @@ export function sweepPlan(capabilities: DeviceCapabilities): PlannedConfig[] {
 }
 
 export function completedEntries(entries: SweepEntry[]) {
-  return entries.filter((entry) => !entry.error && entry.medianMs !== undefined);
+  return entries.filter((entry) => !entry.error && entry.minMs !== undefined);
 }
 
+/**
+ * Ranking uses the per-config minimum, not the median. Background load only ever
+ * adds time, so across interleaved rounds the fastest observed run is the closest
+ * thing to the configuration's own cost. Medians on a busy laptop rank machine
+ * state as much as they rank configurations.
+ */
 export function bestEntry(entries: SweepEntry[], floor = AGREEMENT_FLOOR) {
   const eligible = completedEntries(entries).filter(
     (entry) => !entry.isReference && (entry.agreement ?? 0) >= floor,
   );
   if (eligible.length === 0) return undefined;
   return eligible.reduce((best, entry) =>
-    (entry.medianMs ?? Infinity) < (best.medianMs ?? Infinity) ? entry : best,
+    (entry.minMs ?? Infinity) < (best.minMs ?? Infinity) ? entry : best,
   );
 }
 
 export function speedupVersus(reference: SweepEntry | undefined, entry: SweepEntry | undefined) {
-  if (!reference?.medianMs || !entry?.medianMs) return undefined;
-  return reference.medianMs / entry.medianMs;
+  if (!reference?.minMs || !entry?.minMs) return undefined;
+  return reference.minMs / entry.minMs;
 }

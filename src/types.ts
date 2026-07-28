@@ -44,6 +44,7 @@ export interface SweepEntry extends RunConfig {
   weightBytes?: number;
   loadMs?: number;
   runsMs?: number[];
+  minMs?: number;
   medianMs?: number;
   p95Ms?: number;
   detectionCount?: number;
@@ -59,6 +60,7 @@ export interface SweepResult {
   imageWidth: number;
   imageHeight: number;
   runsPerConfig: number;
+  interleaved: true;
   completedAt: string;
 }
 

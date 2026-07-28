@@ -47,22 +47,22 @@ describe("sweepPlan", () => {
 describe("bestEntry", () => {
   it("ignores configurations below the agreement floor", () => {
     const winner = bestEntry([
-      entry({ id: "reference", isReference: true, medianMs: 3000, agreement: 1 }),
-      entry({ id: "fast-but-wrong", medianMs: 100, agreement: 0.4 }),
-      entry({ id: "honest", medianMs: 700, agreement: 0.9 }),
+      entry({ id: "reference", isReference: true, minMs: 3000, agreement: 1 }),
+      entry({ id: "fast-but-wrong", minMs: 100, agreement: 0.4 }),
+      entry({ id: "honest", minMs: 700, agreement: 0.9 }),
     ]);
     expect(winner?.id).toBe("honest");
   });
 
   it("never returns the reference row", () => {
-    const winner = bestEntry([entry({ id: "reference", isReference: true, medianMs: 10, agreement: 1 })]);
+    const winner = bestEntry([entry({ id: "reference", isReference: true, minMs: 10, agreement: 1 })]);
     expect(winner).toBeUndefined();
   });
 
   it("skips configurations that failed to run", () => {
     const winner = bestEntry([
-      entry({ id: "broken", medianMs: 50, agreement: 1, error: "no adapter" }),
-      entry({ id: "works", medianMs: 900, agreement: 0.95 }),
+      entry({ id: "broken", minMs: 50, agreement: 1, error: "no adapter" }),
+      entry({ id: "works", minMs: 900, agreement: 0.95 }),
     ]);
     expect(winner?.id).toBe("works");
   });
@@ -70,12 +70,12 @@ describe("bestEntry", () => {
 
 describe("speedupVersus", () => {
   it("expresses the winner as a ratio of the reference", () => {
-    const reference = entry({ id: "reference", isReference: true, medianMs: 2966 });
-    const winner = entry({ id: "winner", medianMs: 701 });
+    const reference = entry({ id: "reference", isReference: true, minMs: 2966 });
+    const winner = entry({ id: "winner", minMs: 701 });
     expect(speedupVersus(reference, winner)).toBeCloseTo(4.23, 2);
   });
 
   it("returns undefined when either side is missing a median", () => {
-    expect(speedupVersus(entry({ id: "a" }), entry({ id: "b", medianMs: 10 }))).toBeUndefined();
+    expect(speedupVersus(entry({ id: "a" }), entry({ id: "b", minMs: 10 }))).toBeUndefined();
   });
 });

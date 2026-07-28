@@ -116,79 +116,96 @@ async function runDetection(request: Extract<WorkerRequest, { type: "detect" }>)
   });
 }
 
-async function measureConfig(
-  planned: ReturnType<typeof sweepPlan>[number],
-  requestId: string,
-  imageUrl: string,
-  runs: number,
-  reference: Detection[] | null,
-): Promise<{ entry: SweepEntry; detections: Detection[] }> {
-  const entry: SweepEntry = {
-    id: planned.id,
-    label: planned.label,
-    device: planned.device,
-    dtype: planned.dtype,
-    shortestEdge: planned.shortestEdge,
-    isReference: planned.isReference,
+type Candidate = {
+  entry: SweepEntry;
+  detector: Detector | null;
+  runsMs: number[];
+  detections: Detection[];
+};
+
+function candidateFor(planned: ReturnType<typeof sweepPlan>[number]): Candidate {
+  return {
+    entry: {
+      id: planned.id,
+      label: planned.label,
+      device: planned.device,
+      dtype: planned.dtype,
+      shortestEdge: planned.shortestEdge,
+      isReference: planned.isReference,
+    },
+    detector: null,
+    runsMs: [],
+    detections: [],
   };
-
-  let detector: Detector | null = null;
-  try {
-    const loaded = await loadDetector(planned, requestId, `Starting ${planned.label}`);
-    detector = loaded.detector;
-    entry.loadMs = loaded.loadMs;
-    entry.weightBytes = await measureWeightBytes(planned.dtype);
-
-    send({ type: "progress", requestId, stage: `Warming up ${planned.label}` });
-    await detector(imageUrl, { threshold: THRESHOLD });
-
-    const runsMs: number[] = [];
-    let detections: Detection[] = [];
-    for (let index = 0; index < runs; index += 1) {
-      send({
-        type: "progress",
-        requestId,
-        stage: `${planned.label}: run ${index + 1} of ${runs}`,
-        progress: ((index + 1) / runs) * 100,
-      });
-      const startedAt = performance.now();
-      detections = await detector(imageUrl, { threshold: THRESHOLD });
-      runsMs.push(performance.now() - startedAt);
-    }
-
-    entry.runsMs = runsMs;
-    entry.medianMs = percentile(runsMs, 0.5);
-    entry.p95Ms = percentile(runsMs, 0.95);
-    entry.detectionCount = detections.length;
-    entry.agreement = reference === null ? 1 : detectionAgreement(reference, detections);
-    return { entry, detections };
-  } catch (error) {
-    entry.error = error instanceof Error ? error.message : "This configuration did not run.";
-    return { entry, detections: [] };
-  } finally {
-    if (detector) await detector.dispose();
-  }
 }
 
+/**
+ * Rounds are interleaved rather than run as one block per configuration. A laptop
+ * drifts under thermal and background load over the minutes a sweep takes, and a
+ * block layout charges all of that drift to whichever configuration happened to
+ * hold the slow window. Interleaving spreads it across every configuration, and
+ * the per-config minimum then survives as the least contaminated estimate.
+ */
 async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
   const { capabilities: caps } = await ensureReady();
   await releaseActiveDetector();
 
   const planned = sweepPlan(caps);
-  const entries: SweepEntry[] = [];
-  let reference: Detection[] | null = null;
+  const candidates = planned.map(candidateFor);
 
-  for (const config of planned) {
-    const { entry, detections } = await measureConfig(
-      config,
-      request.requestId,
-      request.imageUrl,
-      request.runs,
-      config.isReference ? null : reference,
-    );
-    if (config.isReference && !entry.error) reference = detections;
-    entries.push(entry);
+  for (const candidate of candidates) {
+    const config = planned.find((item) => item.id === candidate.entry.id)!;
+    try {
+      const loaded = await loadDetector(config, request.requestId, `Loading ${config.label}`);
+      candidate.detector = loaded.detector;
+      candidate.entry.loadMs = loaded.loadMs;
+      candidate.entry.weightBytes = await measureWeightBytes(config.dtype);
+      send({ type: "progress", requestId: request.requestId, stage: `Warming up ${config.label}` });
+      await loaded.detector(request.imageUrl, { threshold: THRESHOLD });
+    } catch (error) {
+      candidate.entry.error =
+        error instanceof Error ? error.message : "This configuration did not run.";
+    }
   }
+
+  const live = candidates.filter((candidate) => candidate.detector);
+  const totalSteps = Math.max(1, request.runs * live.length);
+  let step = 0;
+
+  for (let round = 0; round < request.runs; round += 1) {
+    for (const candidate of live) {
+      step += 1;
+      send({
+        type: "progress",
+        requestId: request.requestId,
+        stage: `Round ${round + 1} of ${request.runs}: ${candidate.entry.label}`,
+        progress: (step / totalSteps) * 100,
+      });
+      const startedAt = performance.now();
+      candidate.detections = await candidate.detector!(request.imageUrl, { threshold: THRESHOLD });
+      candidate.runsMs.push(performance.now() - startedAt);
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (candidate.detector) await candidate.detector.dispose();
+    candidate.detector = null;
+  }
+
+  const reference = candidates.find((candidate) => candidate.entry.isReference);
+  const entries: SweepEntry[] = candidates.map((candidate) => {
+    if (candidate.entry.error) return candidate.entry;
+    candidate.entry.runsMs = candidate.runsMs;
+    candidate.entry.minMs = Math.min(...candidate.runsMs);
+    candidate.entry.medianMs = percentile(candidate.runsMs, 0.5);
+    candidate.entry.p95Ms = percentile(candidate.runsMs, 0.95);
+    candidate.entry.detectionCount = candidate.detections.length;
+    candidate.entry.agreement =
+      !reference || reference.entry.error || candidate.entry.isReference
+        ? 1
+        : detectionAgreement(reference.detections, candidate.detections);
+    return candidate.entry;
+  });
 
   send({
     type: "sweep-result",
@@ -201,6 +218,7 @@ async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
       imageWidth: request.imageWidth,
       imageHeight: request.imageHeight,
       runsPerConfig: request.runs,
+      interleaved: true,
       completedAt: new Date().toISOString(),
     } satisfies SweepResult,
   });
