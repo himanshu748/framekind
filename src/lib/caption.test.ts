@@ -19,6 +19,14 @@ describe("generateAltText", () => {
     expect(text).toContain("on the right");
   });
 
+  it("still places a lone object, which is the case a reader most needs", () => {
+    const text = generateAltText(
+      [{ label: "bicycle", score: 0.94, box: { xmin: 700, ymin: 10, xmax: 960, ymax: 200 } }],
+      1000,
+    );
+    expect(text).toBe("A bicycle is visible. The bicycle is on the right.");
+  });
+
   it("does not claim a low-confidence detection", () => {
     const text = generateAltText(
       [{ label: "cat", score: 0.2, box: { xmin: 0, ymin: 0, xmax: 10, ymax: 10 } }],

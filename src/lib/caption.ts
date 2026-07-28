@@ -80,7 +80,7 @@ export function generateAltText(
     .slice(0, 3)
     .map(([label, items]) => `the ${label} is ${horizontalPosition(items[0], imageWidth)}`);
 
-  if (positions.length < 2) return overview;
+  if (positions.length === 0) return overview;
   const positionSentence = `${joinNatural(positions)}.`;
   return `${overview} ${positionSentence.charAt(0).toUpperCase()}${positionSentence.slice(1)}`;
 }
