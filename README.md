@@ -2,7 +2,7 @@
 
 Private alt-text drafts, powered on your device.
 
-[**Open the live demo**](https://framekind-ai.netlify.app/) · [Arm challenge](https://arm-ai-optimization-challenge.devpost.com/) · [Why the Arm wins landed where they did](docs/arm-optimization.md) · [Sweep evidence](submission-assets/sweep-apple-silicon-interleaved.json)
+[**Open the live demo**](https://framekind-ai.netlify.app/) · [Arm challenge](https://arm-ai-optimization-challenge.devpost.com/) · [Why the Arm wins landed where they did](docs/arm-optimization.md) · [Sweep evidence](submission-assets/sweep-apple-silicon-chrome150.json)
 
 ![FrameKind running in Safari](submission-assets/framekind-safari-desktop-final.png)
 
@@ -14,31 +14,31 @@ Built for the **Mobile AI** track of the [Arm Create AI Optimization Challenge](
 
 The usual advice for shrinking a browser model is to quantize it. On an Arm64 laptop that advice does not survive contact with a benchmark, and FrameKind measures why in the app.
 
-- **Quantization bought nothing on the CPU backend.** UINT8 weights are 64% smaller than FP32, and inference came out at 1.01× the reference. Not a regression, not a win, parity.
+- **Quantization bought nothing on the CPU backend.** UINT8 weights are 64% smaller than FP32, and inference came out at 0.94× the reference. Slightly slower, and across two browsers it sits either side of parity. What it never did was speed anything up.
 - **Quantization on WebGPU is actively harmful.** WebGPU UINT8 ran slower than WebGPU FP32 and scored **0% detection agreement**, meaning it did not find the reference objects at all. The smallest file was not merely the slowest configuration on the fastest backend, it was a broken one, and only the quality guardrail catches that.
-- **The backend was the real lever.** The same FP32 graph moved to WebGPU ran 2.29× faster and reproduced the reference detections exactly.
+- **The backend was the real lever.** The same FP32 graph moved to WebGPU ran 2.39× faster and reproduced the reference detections exactly.
 
-The single largest win was not precision at all. Reducing the input resolution, which costs one property on the image processor, was worth 7.42×.
+The single largest win was not precision at all. Reducing the input resolution, which costs one property on the image processor, was worth 8.11×.
 
 There is an Arm-specific reason for this, worked through in [docs/arm-optimization.md](docs/arm-optimization.md). In short: attention is 56% of this model's arithmetic at native resolution, so cutting tokens attacks a quadratic term, while quantization has no mechanism to pay off in a browser because WebAssembly's `simd128` has no 8-bit dot product or matrix-multiply instruction. The `SDOT` and `SMMLA` instructions that make INT8 fast on Arm, and that Arm exposes to native frameworks through KleidiAI, are not reachable from the wasm sandbox. That is why the quantized rows wander around parity instead of winning. The cost model behind the resolution argument ships as tested code in [`src/lib/cost.ts`](src/lib/cost.ts).
 
 ## Measured on Arm64
 
-Apple Silicon, cross-origin isolated, 4 WASM threads, weights pre-cached, agreement scored against the full-precision WASM reference. Five interleaved rounds. Raw runs: [`submission-assets/sweep-apple-silicon-interleaved.json`](submission-assets/sweep-apple-silicon-interleaved.json).
+Chrome 150 on Apple Silicon, cross-origin isolated, 4 WASM threads, weights pre-cached, agreement scored against the full-precision WASM reference. Five interleaved rounds. Raw runs: [`submission-assets/sweep-apple-silicon-chrome150.json`](submission-assets/sweep-apple-silicon-chrome150.json).
 
 | Configuration | Weights | Best | Median | p95 | Versus reference | Agreement |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| WASM · FP32 (reference) | 25.01 MB | 6,676 ms | 7,214 ms | 7,747 ms | 1.00× | reference |
-| WASM · UINT8 | 9.07 MB | 6,636 ms | 6,830 ms | 8,932 ms | 1.01× | 86% |
-| WASM · UINT8 @384px | 9.07 MB | 2,517 ms | 2,658 ms | 3,278 ms | 2.65× | 67% |
-| WASM · UINT8 @256px | 9.07 MB | 900 ms | 939 ms | 1,172 ms | 7.42× | 86% |
-| WebGPU · FP32 | 25.01 MB | 2,919 ms | 3,076 ms | 3,808 ms | 2.29× | 100% |
-| WebGPU · FP16 | 12.72 MB | 1,594 ms | 1,686 ms | 2,711 ms | 4.19× | 75% |
-| WebGPU · UINT8 | 9.07 MB | 2,818 ms | 3,505 ms | 5,740 ms | 2.37× | 0% |
+| WASM · FP32 (reference) | 25.01 MB | 2,969 ms | 3,432 ms | 3,624 ms | 1.00× | reference |
+| WASM · UINT8 | 9.07 MB | 3,143 ms | 3,268 ms | 3,456 ms | 0.94× | 86% |
+| WASM · UINT8 @384px | 9.07 MB | 1,123 ms | 1,274 ms | 1,319 ms | 2.64× | 67% |
+| WASM · UINT8 @256px | 9.07 MB | 366 ms | 411 ms | 429 ms | 8.11× | 86% |
+| WebGPU · FP32 | 25.01 MB | 1,240 ms | 1,430 ms | 1,583 ms | 2.39× | 100% |
+| WebGPU · FP16 | 12.72 MB | 634 ms | 731 ms | 916 ms | 4.68× | 75% |
+| WebGPU · UINT8 | 9.07 MB | 1,596 ms | 1,713 ms | 1,722 ms | 1.86× | 0% |
 
 Ratios are computed on best-round times. Weight sizes are the bytes this device actually fetched, read back from the Cache API, not constants written into the source.
 
-The absolute numbers are high because this machine was busy, and that is the point: the ratios still reproduce. Getting there took a methodology fix, described below.
+The same sweep was run in a second Chromium build on a heavily loaded machine, where every absolute number roughly doubled. The ratios held: 1.01× against 0.94× for quantization, 2.29× against 2.39× for WebGPU, 7.42× against 8.11× for the resolution cut, and byte-identical agreement. That run is kept at [`sweep-apple-silicon-interleaved.json`](submission-assets/sweep-apple-silicon-interleaved.json) as the noise control. Getting ratios that survive a busy machine took a methodology fix, described below.
 
 ## Why the benchmark is built the way it is
 
@@ -49,7 +49,8 @@ An earlier version of this project reported a 3.43× speedup from quantization, 
 | Blocks, run 1 | 0.99× |
 | Blocks, run 2 | 0.62× |
 | Blocks, run 3 | 1.54× |
-| **Interleaved, 5 rounds** | **1.01×** |
+| **Interleaved, loaded machine** | **1.01×** |
+| **Interleaved, Chrome 150** | **0.94×** |
 
 A laptop drifts under thermal and background load over the minutes a sweep takes, and a block layout charges all of that drift to whichever configuration happened to hold the slow window. Interleaving the rounds spreads it across every row, and ranking on each configuration's best round discards the contaminated samples, because background load only ever adds time. That is why the ratios above reproduce on a busy machine while the earlier block-structured numbers swung by a factor of two.
 
@@ -59,7 +60,7 @@ This is one machine and one architecture. Run the sweep on your own Arm device, 
 
 ## How the default is chosen
 
-FrameKind runs the fastest configuration that reproduces the reference detections exactly, which on a WebGPU-capable Arm device is WebGPU FP32. Every reduced-precision variant measured here loses agreement, so the default trades no quality for its 2.29×. Quantization is kept for the WASM fallback, where it is the only lever left and the download saving is real regardless of what latency does.
+FrameKind runs the fastest configuration that reproduces the reference detections exactly, which on a WebGPU-capable Arm device is WebGPU FP32. Every reduced-precision variant measured here loses agreement, so the default trades no quality for its 2.39×. Quantization is kept for the WASM fallback, where it is the only lever left and the download saving is real regardless of what latency does.
 
 The status bar names the configuration actually in use.
 
