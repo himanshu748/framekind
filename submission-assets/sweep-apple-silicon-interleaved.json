@@ -1,0 +1,173 @@
+{
+  "entries": [
+    {
+      "id": "wasm-fp32-512",
+      "label": "WASM · FP32",
+      "device": "wasm",
+      "dtype": "fp32",
+      "shortestEdge": 512,
+      "isReference": true,
+      "loadMs": 130.15999999828637,
+      "weightBytes": 26227993,
+      "runsMs": [
+        7550.0250000003725,
+        6676.089999999851,
+        7214.140000000596,
+        7090.320000000298,
+        7746.754999998957
+      ],
+      "minMs": 6676.089999999851,
+      "medianMs": 7214.140000000596,
+      "p95Ms": 7746.754999998957,
+      "detectionCount": 4,
+      "agreement": 1
+    },
+    {
+      "id": "wasm-uint8-512",
+      "label": "WASM · UINT8",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 734.640000000596,
+      "weightBytes": 9508237,
+      "runsMs": [
+        6725.36999999918,
+        6635.9399999994785,
+        6829.745000001043,
+        6845.730000000447,
+        8931.759999999776
+      ],
+      "minMs": 6635.9399999994785,
+      "medianMs": 6829.745000001043,
+      "p95Ms": 8931.759999999776,
+      "detectionCount": 3,
+      "agreement": 0.8571428571428571
+    },
+    {
+      "id": "wasm-uint8-384",
+      "label": "WASM · UINT8 @384px",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 384,
+      "isReference": false,
+      "loadMs": 387.3300000000745,
+      "weightBytes": 9508237,
+      "runsMs": [
+        2517.1199999991804,
+        2657.9199999999255,
+        2560,
+        2714.949999999255,
+        3278.2050000000745
+      ],
+      "minMs": 2517.1199999991804,
+      "medianMs": 2657.9199999999255,
+      "p95Ms": 3278.2050000000745,
+      "detectionCount": 5,
+      "agreement": 0.6666666666666666
+    },
+    {
+      "id": "wasm-uint8-256",
+      "label": "WASM · UINT8 @256px",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 256,
+      "isReference": false,
+      "loadMs": 161.24500000104308,
+      "weightBytes": 9508237,
+      "runsMs": [
+        901.125,
+        939.2249999996275,
+        1036.820000000298,
+        899.714999999851,
+        1172.195000000298
+      ],
+      "minMs": 899.714999999851,
+      "medianMs": 939.2249999996275,
+      "p95Ms": 1172.195000000298,
+      "detectionCount": 3,
+      "agreement": 0.8571428571428571
+    },
+    {
+      "id": "webgpu-fp32-512",
+      "label": "WebGPU · FP32",
+      "device": "webgpu",
+      "dtype": "fp32",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 209.535000000149,
+      "weightBytes": 26227993,
+      "runsMs": [
+        3143.9949999991804,
+        2919.269999999553,
+        3075.559999998659,
+        3000.1450000014156,
+        3807.6349999997765
+      ],
+      "minMs": 2919.269999999553,
+      "medianMs": 3075.559999998659,
+      "p95Ms": 3807.6349999997765,
+      "detectionCount": 4,
+      "agreement": 1
+    },
+    {
+      "id": "webgpu-fp16-512",
+      "label": "WebGPU · FP16",
+      "device": "webgpu",
+      "dtype": "fp16",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 1082.9899999983609,
+      "weightBytes": 13341636,
+      "runsMs": [
+        1685.960000000894,
+        2104.1549999993294,
+        1598.8199999984354,
+        1593.995000001043,
+        2711.4900000002235
+      ],
+      "minMs": 1593.995000001043,
+      "medianMs": 1685.960000000894,
+      "p95Ms": 2711.4900000002235,
+      "detectionCount": 4,
+      "agreement": 0.75
+    },
+    {
+      "id": "webgpu-uint8-512",
+      "label": "WebGPU · UINT8",
+      "device": "webgpu",
+      "dtype": "uint8",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 131.46500000171363,
+      "weightBytes": 9508237,
+      "runsMs": [
+        3505.140000000596,
+        2818.414999999106,
+        3102.140000000596,
+        5739.74499999918,
+        4880.875
+      ],
+      "minMs": 2818.414999999106,
+      "medianMs": 3505.140000000596,
+      "p95Ms": 5739.74499999918,
+      "detectionCount": 3,
+      "agreement": 0
+    }
+  ],
+  "referenceId": "wasm-fp32-512",
+  "capabilities": {
+    "webgpu": true,
+    "shaderF16": true,
+    "crossOriginIsolated": true,
+    "hardwareConcurrency": 10,
+    "wasmThreads": 4,
+    "adapter": "apple"
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.24012.9 Chrome/148.0.7778.280 Electron/42.7.0 Safari/537.36",
+  "imageWidth": 1448,
+  "imageHeight": 1086,
+  "runsPerConfig": 5,
+  "interleaved": true,
+  "completedAt": "2026-07-28T08:19:31.710Z"
+}

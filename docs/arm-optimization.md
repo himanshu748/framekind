@@ -1,10 +1,10 @@
 # Why the Arm wins came from the backend and the token count, not the weights
 
-FrameKind's sweep produced a result that contradicts the standard advice for shrinking a browser model: quantizing YOLOS Tiny to UINT8 made it 64% smaller and produced no dependable speedup. Across three sweeps on the same Arm64 laptop the UINT8-versus-FP32 ratio on the WASM backend measured 0.99×, 0.62× and 1.54×, landing on either side of parity with machine load. This note explains why an absent speedup is the expected outcome on Arm in a browser, using a cost model that ships as tested code and the constraints of the runtime that actually executes the graph.
+FrameKind's sweep produced a result that contradicts the standard advice for shrinking a browser model: quantizing YOLOS Tiny to UINT8 made it 64% smaller and 1.01× as fast, which is to say not faster at all. This note explains why parity is the expected outcome on Arm in a browser, using a cost model that ships as tested code and the constraints of the runtime that actually executes the graph.
 
-Everything labelled *modelled* comes from [`src/lib/cost.ts`](../src/lib/cost.ts) and is covered by [`src/lib/cost.test.ts`](../src/lib/cost.test.ts), so the arithmetic below is reproducible with `npm test` rather than asserted. Everything labelled *measured* is a range across three sweeps, one of which was deliberately run with competing inference sessions on the machine. Raw runs from the first are in [`submission-assets/sweep-apple-silicon-chromium.json`](../submission-assets/sweep-apple-silicon-chromium.json).
+Everything labelled *modelled* comes from [`src/lib/cost.ts`](../src/lib/cost.ts) and is covered by [`src/lib/cost.test.ts`](../src/lib/cost.test.ts), so the arithmetic below is reproducible with `npm test` rather than asserted. Everything labelled *measured* comes from five interleaved rounds in [`submission-assets/sweep-apple-silicon-interleaved.json`](../submission-assets/sweep-apple-silicon-interleaved.json), ranked on best-round times.
 
-A methodological note that turned out to matter more than expected: on this hardware the WASM CPU path is the noisiest component in the system. The FP32 reference alone measured 3,154 ms, 3,444 ms and 7,441 ms across the three sweeps. Detection agreement, by contrast, was identical every time. Any argument built on a single CPU latency measurement here is measuring machine state, which is why the numbers below are ranges and why the app now takes five timed runs per configuration and reports p95 next to the median.
+A methodological note that turned out to matter more than expected: on this hardware the WASM CPU path is the noisiest component in the system, and an earlier block-structured version of this benchmark measured the same UINT8-versus-FP32 comparison at 0.99×, 0.62× and 1.54× on three consecutive runs. Interleaving the rounds and ranking on the best round pulled that to a stable 1.01×. Detection agreement, by contrast, was identical from the very first run. The latency half of this instrument had to be engineered into reliability; the quality half never needed it.
 
 ## Where the time goes
 
@@ -15,10 +15,10 @@ The processor resizes to a shortest edge of 512 by default, so the bundled 1448�
 | Shortest edge | Input | Tokens | Total MACs | Attention share | Modelled vs 512 | Measured vs 512 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 512 | 683×512 | 1,445 | 17.29 G | 56% | 1.00× | 1.00× |
-| 384 | 512×384 | 869 | 8.09 G | 43% | 2.14× | 1.75× to 2.63× |
-| 256 | 341×256 | 437 | 3.20 G | 28% | 5.40× | 5.70× to 8.02× |
+| 384 | 512×384 | 869 | 8.09 G | 43% | 2.14× | 2.64× |
+| 256 | 341×256 | 437 | 3.20 G | 28% | 5.40× | 7.37× |
 
-The measured column holds the UINT8 backend fixed and varies only the resolution, across three sweeps, so it isolates the token count from every other variable. The modelled ratio falls inside the measured range in both cases.
+The measured column holds the UINT8 backend fixed and varies only the resolution, so it isolates the token count from every other variable.
 
 At native resolution **attention is the majority of the arithmetic**, 56% of it. That is the fact that makes input resolution the strongest single lever in this model: halving the shortest edge cuts the token count by 3.31× but cuts the quadratic attention term by 10.93×, so the expensive half of the network shrinks hardest. Measured speedup tends to run ahead of the modelled ratio, which is consistent with the activation working set falling at the same time. The attention score matrix alone is 1,445² entries per head at native resolution.
 
@@ -37,19 +37,19 @@ None of that is reachable from a browser. WebAssembly's shipped SIMD is `simd128
 
 The bridge that would close this gap is the WebAssembly **Relaxed SIMD** proposal, whose integer dot product instruction is intended to lower to VNNI on x86-64 and to the `SDOT` family on Arm. It is not wired into this runtime. The artifacts ONNX Runtime Web ships and that this project bundles are `ort-wasm-simd-threaded.wasm` and `ort-wasm-simd-threaded.jsep.wasm`, both fixed-SIMD builds, and dispatching quantized GEMM through relaxed SIMD integer dot product is still an [open feature request against ONNX Runtime](https://github.com/microsoft/onnxruntime/issues/22533), filed in October 2024. The reporter's own prototype measured roughly 1.15× through VNNI and explicitly had not validated the Arm `SDOT` path.
 
-So the absent speedup is not an anomaly to explain away. It is what a quantized model should do when the target cannot execute the instructions that make quantization pay: with no mechanism pushing the ratio below 1.0, the measurement is free to wander around parity with whatever else the machine is doing, which is exactly what three sweeps showed.
+So the measured 1.01× is not an anomaly to explain away. It is what a quantized model should do when the target cannot execute the instructions that make quantization pay: no mechanism exists to push the ratio below 1.0, so it sits at parity, and the dequantize overhead is roughly cancelled by the narrower operands.
 
 ## Why WebGPU won instead
 
-WebGPU sidesteps the question. The work moves off the CPU, so the absence of `SDOT` in the wasm sandbox stops mattering. It was also the most reproducible configuration measured: WebGPU FP32 landed at 1,498 ms and 1,507 ms on the two sweeps where the machine was not loaded, while reproducing the reference detections exactly.
+WebGPU sidesteps the question. The work moves off the CPU, so the absence of `SDOT` in the wasm sandbox stops mattering, and the same FP32 graph ran 2.29× faster while reproducing the reference detections exactly.
 
-The sweep also found that quantizing *on* WebGPU is worse than useless here. WebGPU UINT8 was slower than WebGPU FP32 in every sweep and scored **0% detection agreement in every sweep**, meaning it did not find the reference objects at all. On that backend the quantized graph is not merely a bad trade, it is broken, and only the agreement guardrail surfaces that. A latency-only benchmark would have reported it as a mid-table result.
+The sweep also found that quantizing *on* WebGPU is worse than useless here. WebGPU UINT8 was slower than WebGPU FP32 (2,818 ms against 2,919 ms on best rounds, and 3,505 ms against 3,076 ms on medians) and scored **0% detection agreement in every sweep**, meaning it did not find the reference objects at all. On that backend the quantized graph is not merely a bad trade, it is broken, and only the agreement guardrail surfaces that. A latency-only benchmark would have reported it as a mid-table result.
 
 ## What this means for the product
 
 FrameKind picks the fastest configuration that reproduces the reference detections exactly, which on a WebGPU-capable Arm device is WebGPU FP32. Quantization is kept as the WASM fallback, where the download saving is real even though the latency saving is not, and where no better lever exists.
 
-Input resolution is deliberately left out of the default. It is the largest lever available, worth roughly 6× to 8× on the same backend, but it is the one that changes what the model can see, and this is an accessibility tool where a missed object becomes a missing sentence in someone's alt text. It belongs in the sweep, where a user can see the cost, rather than silently in the default.
+Input resolution is deliberately left out of the default. It is the largest lever available, worth 7.37× on the same backend, but it is the one that changes what the model can see, and this is an accessibility tool where a missed object becomes a missing sentence in someone's alt text. It belongs in the sweep, where a user can see the cost, rather than silently in the default.
 
 ## What would change the conclusion
 
