@@ -43,6 +43,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(true);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [sweepResult, setSweepResult] = useState<SweepResult | null>(null);
+  const [sweepError, setSweepError] = useState("");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
@@ -55,6 +56,7 @@ export default function App() {
     setDetections([]);
     setDraft("");
     setSweepResult(null);
+    setSweepError("");
     setError("");
     setIsProcessing(true);
   }, []);
@@ -133,7 +135,7 @@ export default function App() {
     if (isProcessing || isBenchmarking) return;
     const generation = analysisGenerationRef.current;
     setIsBenchmarking(true);
-    setError("");
+    setSweepError("");
     try {
       const result = await sweep(imageUrl, naturalSize.width, naturalSize.height, SWEEP_RUNS);
       if (generation !== analysisGenerationRef.current) return;
@@ -141,7 +143,7 @@ export default function App() {
       setModelReady(true);
     } catch (reason) {
       if (generation !== analysisGenerationRef.current) return;
-      setError(reason instanceof Error ? reason.message : "The sweep did not finish.");
+      setSweepError(reason instanceof Error ? reason.message : "The sweep did not finish.");
     } finally {
       if (generation === analysisGenerationRef.current) setIsBenchmarking(false);
     }
@@ -183,6 +185,7 @@ export default function App() {
         </div>
         <BenchmarkPanel
           result={sweepResult}
+          error={sweepError}
           isRunning={isBenchmarking}
           disabled={isProcessing}
           progress={progress}

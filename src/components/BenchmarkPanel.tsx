@@ -5,6 +5,7 @@ import type { SweepEntry, SweepResult } from "../types";
 
 interface BenchmarkPanelProps {
   result: SweepResult | null;
+  error: string;
   isRunning: boolean;
   disabled: boolean;
   progress: { stage: string; progress?: number };
@@ -40,14 +41,16 @@ function exportSweep(result: SweepResult) {
   URL.revokeObjectURL(url);
 }
 
-export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }: BenchmarkPanelProps) {
+export function BenchmarkPanel({ result, error, isRunning, disabled, progress, onRun }: BenchmarkPanelProps) {
   const reference = result?.entries.find((entry) => entry.id === result.referenceId);
   const winner = result ? bestEntry(result.entries) : undefined;
   const speedup = speedupVersus(reference, winner);
 
   const status = isRunning
     ? progress.stage
-    : result && winner
+    : error
+      ? `The sweep stopped: ${error}`
+      : result && winner
       ? `Fastest configuration holding at least ${Math.round(AGREEMENT_FLOOR * 100)}% agreement: ${winner.label}, ${speedup?.toFixed(2)}× the FP32 WASM reference on best-round times.`
       : result
         ? "No configuration met the agreement floor on this device."
@@ -127,7 +130,7 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
 
       <div className="benchmark-status" role="status" aria-live="polite">
         <Info aria-hidden="true" />
-        <span>{status}</span>
+        <span className={error && !isRunning ? "sweep-error" : undefined}>{status}</span>
         {isRunning && (
           <span className="benchmark-progress" aria-hidden="true">
             <span style={{ width: `${progress.progress ?? 12}%` }} />
