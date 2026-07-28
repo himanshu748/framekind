@@ -1,0 +1,151 @@
+{
+  "entries": [
+    {
+      "id": "wasm-fp32-512",
+      "label": "WASM · FP32",
+      "device": "wasm",
+      "dtype": "fp32",
+      "shortestEdge": 512,
+      "isReference": true,
+      "loadMs": 108.42499999888241,
+      "weightBytes": 26227993,
+      "runsMs": [
+        2840.1150000002235,
+        3201.234999999404,
+        3154.070000000298
+      ],
+      "medianMs": 3154.070000000298,
+      "p95Ms": 3201.234999999404,
+      "detectionCount": 4,
+      "agreement": 1
+    },
+    {
+      "id": "wasm-uint8-512",
+      "label": "WASM · UINT8",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 77.15499999932945,
+      "weightBytes": 9508237,
+      "runsMs": [
+        3183.269999999553,
+        3136.4199999999255,
+        3245.77499999851
+      ],
+      "medianMs": 3183.269999999553,
+      "p95Ms": 3245.77499999851,
+      "detectionCount": 3,
+      "agreement": 0.8571428571428571
+    },
+    {
+      "id": "wasm-uint8-384",
+      "label": "WASM · UINT8 @384px",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 384,
+      "isReference": false,
+      "loadMs": 71.39500000141561,
+      "weightBytes": 9508237,
+      "runsMs": [
+        1234.004999998957,
+        1313.2350000012666,
+        1254.1699999999255
+      ],
+      "medianMs": 1254.1699999999255,
+      "p95Ms": 1313.2350000012666,
+      "detectionCount": 5,
+      "agreement": 0.6666666666666666
+    },
+    {
+      "id": "wasm-uint8-256",
+      "label": "WASM · UINT8 @256px",
+      "device": "wasm",
+      "dtype": "uint8",
+      "shortestEdge": 256,
+      "isReference": false,
+      "loadMs": 74.05499999970198,
+      "weightBytes": 9508237,
+      "runsMs": [
+        397.14000000059605,
+        397.46000000089407,
+        402.9500000011176
+      ],
+      "medianMs": 397.46000000089407,
+      "p95Ms": 402.9500000011176,
+      "detectionCount": 3,
+      "agreement": 0.8571428571428571
+    },
+    {
+      "id": "webgpu-fp32-512",
+      "label": "WebGPU · FP32",
+      "device": "webgpu",
+      "dtype": "fp32",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 77.93000000156462,
+      "weightBytes": 26227993,
+      "runsMs": [
+        1118.245000001043,
+        1498.3100000005215,
+        1996.929999999702
+      ],
+      "medianMs": 1498.3100000005215,
+      "p95Ms": 1996.929999999702,
+      "detectionCount": 4,
+      "agreement": 1
+    },
+    {
+      "id": "webgpu-fp16-512",
+      "label": "WebGPU · FP16",
+      "device": "webgpu",
+      "dtype": "fp16",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 327.5049999989569,
+      "weightBytes": 13341636,
+      "runsMs": [
+        565.3899999987334,
+        593.0799999982119,
+        573.6649999991059
+      ],
+      "medianMs": 573.6649999991059,
+      "p95Ms": 593.0799999982119,
+      "detectionCount": 4,
+      "agreement": 0.75
+    },
+    {
+      "id": "webgpu-uint8-512",
+      "label": "WebGPU · UINT8",
+      "device": "webgpu",
+      "dtype": "uint8",
+      "shortestEdge": 512,
+      "isReference": false,
+      "loadMs": 88.10999999940395,
+      "weightBytes": 9508237,
+      "runsMs": [
+        1649.2000000011176,
+        1622.1000000014901,
+        1620.1349999997765
+      ],
+      "medianMs": 1622.1000000014901,
+      "p95Ms": 1649.2000000011176,
+      "detectionCount": 3,
+      "agreement": 0
+    }
+  ],
+  "referenceId": "wasm-fp32-512",
+  "capabilities": {
+    "webgpu": true,
+    "shaderF16": true,
+    "crossOriginIsolated": true,
+    "hardwareConcurrency": 10,
+    "wasmThreads": 4,
+    "adapter": "apple"
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.24012.9 Chrome/148.0.7778.280 Electron/42.7.0 Safari/537.36",
+  "imageWidth": 1448,
+  "imageHeight": 1086,
+  "runsPerConfig": 3,
+  "completedAt": "2026-07-28T06:49:56.192Z"
+}
