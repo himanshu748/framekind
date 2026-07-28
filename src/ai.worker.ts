@@ -145,6 +145,12 @@ function candidateFor(planned: ReturnType<typeof sweepPlan>[number]): Candidate 
  * block layout charges all of that drift to whichever configuration happened to
  * hold the slow window. Interleaving spreads it across every configuration, and
  * the per-config minimum then survives as the least contaminated estimate.
+ *
+ * Exactly one session is resident at a time. Holding all of them open would
+ * interleave without reloading, but that is roughly 105 MB of weights plus seven
+ * runtime arenas, which a 16 GB laptop feels and a phone cannot survive. Paying a
+ * cached reload and a warm-up per measurement is the cost of bounding the sweep
+ * to the memory the product itself uses.
  */
 async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
   const { capabilities: caps } = await ensureReady();
@@ -152,49 +158,51 @@ async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
 
   const planned = sweepPlan(caps);
   const candidates = planned.map(candidateFor);
-
-  for (const candidate of candidates) {
-    const config = planned.find((item) => item.id === candidate.entry.id)!;
-    try {
-      const loaded = await loadDetector(config, request.requestId, `Loading ${config.label}`);
-      candidate.detector = loaded.detector;
-      candidate.entry.loadMs = loaded.loadMs;
-      candidate.entry.weightBytes = await measureWeightBytes(config.dtype);
-      send({ type: "progress", requestId: request.requestId, stage: `Warming up ${config.label}` });
-      await loaded.detector(request.imageUrl, { threshold: THRESHOLD });
-    } catch (error) {
-      candidate.entry.error =
-        error instanceof Error ? error.message : "This configuration did not run.";
-    }
-  }
-
-  const live = candidates.filter((candidate) => candidate.detector);
-  const totalSteps = Math.max(1, request.runs * live.length);
+  const byId = new Map(candidates.map((candidate) => [candidate.entry.id, candidate]));
+  const totalSteps = Math.max(1, request.runs * planned.length);
   let step = 0;
 
   for (let round = 0; round < request.runs; round += 1) {
-    for (const candidate of live) {
+    for (const config of planned) {
+      const candidate = byId.get(config.id)!;
       step += 1;
+      if (candidate.entry.error) continue;
+
       send({
         type: "progress",
         requestId: request.requestId,
-        stage: `Round ${round + 1} of ${request.runs}: ${candidate.entry.label}`,
+        stage: `Round ${round + 1} of ${request.runs}: ${config.label}`,
         progress: (step / totalSteps) * 100,
       });
-      const startedAt = performance.now();
-      candidate.detections = await candidate.detector!(request.imageUrl, { threshold: THRESHOLD });
-      candidate.runsMs.push(performance.now() - startedAt);
-    }
-  }
 
-  for (const candidate of candidates) {
-    if (candidate.detector) await candidate.detector.dispose();
-    candidate.detector = null;
+      let detector: Detector | null = null;
+      try {
+        const loaded = await loadDetector(config, request.requestId, config.label);
+        detector = loaded.detector;
+        if (round === 0) {
+          candidate.entry.loadMs = loaded.loadMs;
+          candidate.entry.weightBytes = await measureWeightBytes(config.dtype);
+        }
+        await detector(request.imageUrl, { threshold: THRESHOLD });
+        const startedAt = performance.now();
+        candidate.detections = await detector(request.imageUrl, { threshold: THRESHOLD });
+        candidate.runsMs.push(performance.now() - startedAt);
+      } catch (error) {
+        candidate.entry.error =
+          error instanceof Error ? error.message : "This configuration did not run.";
+      } finally {
+        if (detector) await detector.dispose();
+      }
+    }
   }
 
   const reference = candidates.find((candidate) => candidate.entry.isReference);
   const entries: SweepEntry[] = candidates.map((candidate) => {
     if (candidate.entry.error) return candidate.entry;
+    if (candidate.runsMs.length === 0) {
+      candidate.entry.error = "This configuration produced no timed runs.";
+      return candidate.entry;
+    }
     candidate.entry.runsMs = candidate.runsMs;
     candidate.entry.minMs = Math.min(...candidate.runsMs);
     candidate.entry.medianMs = percentile(candidate.runsMs, 0.5);

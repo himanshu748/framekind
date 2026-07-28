@@ -94,8 +94,8 @@ npm run preview
 ## Sweep method
 
 1. Detect the backends this browser exposes, and set WASM threads from `crossOriginIsolated` and core count.
-2. Load every configuration, warm each one with an untimed run, and hold all sessions open.
-3. Run five interleaved rounds, taking one timed run per configuration per round, so drift is shared rather than charged to whichever configuration held the slow window.
+2. Run five interleaved rounds, taking one timed run per configuration per round, so drift is shared rather than charged to whichever configuration held the slow window.
+3. Keep exactly one session resident: load from cache, warm with an untimed run, take the timed run, dispose. Holding all seven open would avoid the reloads, but that is roughly 105 MB of weights plus seven runtime arenas, which a 16 GB laptop feels and a phone cannot survive. The sweep costs what the product costs.
 4. Score every configuration against the full-precision WASM reference: identical label plus bounding-box intersection-over-union of at least 0.5, then a symmetric match rate across both prediction sets.
 5. Read each variant's weight size back from the browser cache.
 6. Rank on each configuration's best round, report best, median and p95 together, and export every raw run as JSON.

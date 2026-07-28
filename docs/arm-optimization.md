@@ -67,6 +67,12 @@ The obvious cheap fix is to score agreement on a lower confidence threshold, com
 
 The extra scoring pass was removed rather than left in, since it cost one full inference per configuration and bought no resolution. What survives is the box count shown beside the reference row, which makes the sample size visible: it is the number that revealed the idea had failed. The real fix is more images, which is why it heads the next-steps list rather than a threshold change.
 
+## A note on what the sweep costs to run
+
+Interleaving is easiest to implement by holding every session open and round-robining between them, and that is how the first version worked. It is the wrong trade for this project: seven resident sessions is roughly 105 MB of weights plus seven ONNX runtime arenas, which is noticeable on a 16 GB laptop and out of reach on the phones this track also covers.
+
+The sweep therefore keeps exactly one session resident and pays a cached reload plus a warm-up for every measurement. That roughly doubles the wall-clock time and leaves the memory ceiling equal to what the product itself uses, so running the benchmark can never be the reason a device falls over. An optimization tool that needs more headroom than the thing it optimizes is measuring the wrong machine.
+
 ## Limits of this analysis
 
 The cost model counts multiply-accumulates in the transformer encoder. It does not model the patch embedding convolution, layer norms, softmax, the detection heads, or memory bandwidth, and it assumes the runtime achieves similar utilisation across configurations. The attribution of the null quantization result to missing Arm INT8 instructions rests on the shipped runtime artifacts and the open upstream issue rather than on a disassembly of the wasm binary or a per-operator profile. A per-op profile on a device with and without `i8mm` would settle it directly and is the obvious next experiment.
