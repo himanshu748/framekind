@@ -12,37 +12,41 @@ Built for the **Mobile AI** track of the [Arm Create AI Optimization Challenge](
 
 ## The finding
 
-The usual advice for shrinking a browser model is to quantize it. On an Arm64 laptop that advice is wrong in three separate ways, and FrameKind measures all three in the app.
+The usual advice for shrinking a browser model is to quantize it. On an Arm64 laptop that advice does not survive contact with a benchmark, and FrameKind measures why in the app.
 
-- **Quantization alone bought nothing.** UINT8 weights are 64% smaller than FP32, and the median inference was 3,183 ms against the FP32 reference's 3,154 ms. That is 0.99×, a rounding error, not a speedup.
-- **The backend was the real lever.** Moving the same FP32 graph from threaded WASM to WebGPU gave 2.10× and reproduced the reference detections exactly.
-- **Quantization on WebGPU is actively harmful.** WebGPU UINT8 ran slower than WebGPU FP32 and scored 0% agreement, meaning it did not find the reference objects at all. The smallest file was the worst configuration on the fastest backend.
+- **Quantization never produced a reliable speedup.** UINT8 weights are 64% smaller than FP32, and across three sweeps the UINT8-versus-FP32 ratio on WASM measured 0.99×, 0.62× and 1.54×. It lands on either side of parity depending on what else the machine is doing. What it never did was resemble a large, dependable win.
+- **Quantization on WebGPU is actively harmful.** WebGPU UINT8 ran slower than WebGPU FP32 and scored **0% detection agreement in all three sweeps**, meaning it did not find the reference objects at all. The smallest file was the worst configuration on the fastest backend.
+- **The backend was the real lever, and the only stable one.** WebGPU FP32 reproduced the reference detections exactly and landed at 1,498 ms and 1,507 ms on the two sweeps where the machine was not loaded.
 
-The single largest win was not precision at all. Halving the input resolution, which costs one property on the image processor, was worth 7.94×.
+Reducing the input resolution was worth more than any precision change in every sweep, though the size of that win moved too.
 
-There is an Arm-specific reason for all three, worked through in [docs/arm-optimization.md](docs/arm-optimization.md). In short: attention is 56% of this model's arithmetic at native resolution, so cutting tokens attacks a quadratic term, while quantization cannot pay off in a browser because WebAssembly's `simd128` has no 8-bit dot product or matrix-multiply instruction. The `SDOT` and `SMMLA` instructions that make INT8 fast on Arm, and that Arm exposes to native frameworks through KleidiAI, are not reachable from the wasm sandbox. The cost model behind that argument ships as tested code in [`src/lib/cost.ts`](src/lib/cost.ts).
+The second-order finding matters as much as the first: **the CPU path is the noisiest thing in the system.** The WASM FP32 reference alone measured 3,154 ms, 3,444 ms and 7,441 ms on the same machine and image. Any single-run ratio published from that path, including the 3.43× this project once claimed, is measuring machine state as much as the optimization. The detection-agreement column, by contrast, reproduced exactly across all three sweeps. That asymmetry is the reason the benchmark ships inside the product instead of its output shipping in this file.
+
+There is an Arm-specific reason for this, worked through in [docs/arm-optimization.md](docs/arm-optimization.md). In short: attention is 56% of this model's arithmetic at native resolution, so cutting tokens attacks a quadratic term, while quantization has no mechanism to pay off in a browser because WebAssembly's `simd128` has no 8-bit dot product or matrix-multiply instruction. The `SDOT` and `SMMLA` instructions that make INT8 fast on Arm, and that Arm exposes to native frameworks through KleidiAI, are not reachable from the wasm sandbox. That is why the quantized rows wander around parity instead of winning. The cost model behind the resolution argument ships as tested code in [`src/lib/cost.ts`](src/lib/cost.ts).
 
 ## Measured on Arm64
 
-Apple Silicon, Chromium 148, cross-origin isolated, 4 WASM threads, weights pre-cached, one warm-up and three timed runs per configuration, agreement scored against the full-precision WASM reference. Raw runs: [`submission-assets/sweep-apple-silicon-chromium.json`](submission-assets/sweep-apple-silicon-chromium.json).
+Apple Silicon, cross-origin isolated, 4 WASM threads, weights pre-cached, agreement scored against the full-precision WASM reference. Three sweeps: one in Chromium 148, two in Chrome 150, the middle one deliberately run with other inference sessions competing for the machine. Raw runs from the first sweep: [`submission-assets/sweep-apple-silicon-chromium.json`](submission-assets/sweep-apple-silicon-chromium.json).
 
-| Configuration | Weights | Median | Versus reference | Agreement |
-| --- | ---: | ---: | ---: | ---: |
-| WASM · FP32 (reference) | 25.01 MB | 3,154 ms | 1.00× | reference |
-| WASM · UINT8 | 9.07 MB | 3,183 ms | 0.99× | 86% |
-| WASM · UINT8 @384px | 9.07 MB | 1,254 ms | 2.52× | 67% |
-| WASM · UINT8 @256px | 9.07 MB | 397 ms | 7.94× | 86% |
-| WebGPU · FP32 | 25.01 MB | 1,498 ms | 2.10× | 100% |
-| WebGPU · FP16 | 12.72 MB | 574 ms | 5.50× | 75% |
-| WebGPU · UINT8 | 9.07 MB | 1,622 ms | 1.94× | 0% |
+Median inference, in milliseconds, per sweep:
 
-Weight sizes are the bytes this device actually fetched, read back from the Cache API, not constants written into the source.
+| Configuration | Weights | Sweep 1 | Sweep 2 (loaded) | Sweep 3 | Agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| WASM · FP32 (reference) | 25.01 MB | 3,154 | 3,444 | 7,441 | reference |
+| WASM · UINT8 | 9.07 MB | 3,183 | 5,584 | 4,824 | 86% |
+| WASM · UINT8 @384px | 9.07 MB | 1,254 | 3,188 | 1,836 | 67% |
+| WASM · UINT8 @256px | 9.07 MB | 397 | 979 | 624 | 86% |
+| WebGPU · FP32 | 25.01 MB | 1,498 | 3,409 | 1,507 | 100% |
+| WebGPU · FP16 | 12.72 MB | 574 | 1,637 | 801 | 75% |
+| WebGPU · UINT8 | 9.07 MB | 1,622 | 4,425 | 2,351 | 0% |
 
-These are one machine and one browser. The point of shipping the sweep inside the app is that the ranking is not portable: run it on your own Arm device and the winner may differ. FrameKind picks per device rather than baking in a number.
+Weight sizes are the bytes this device actually fetched, read back from the Cache API, not constants written into the source. The agreement column is a single column because it did not vary: every configuration scored identically in all three sweeps.
+
+Read the latency columns as a range, not as three attempts at one number. The ordering is stable, the ratios are not, and the WASM rows move most. This is one machine and one architecture. Run the sweep on your own Arm device, compare median against p95, and expect the winner to differ.
 
 ## How the default is chosen
 
-FrameKind runs the fastest configuration that reproduces the reference detections exactly, which on a WebGPU-capable Arm device is WebGPU FP32. Every reduced-precision variant measured here loses agreement, so the default trades no quality for its 2.10×. Quantization is kept for the WASM fallback, where it is the only lever left and the download saving is real.
+FrameKind runs the fastest configuration that reproduces the reference detections exactly, which on a WebGPU-capable Arm device is WebGPU FP32. Every reduced-precision variant measured here loses agreement, so the default trades no quality at all, and it was the most reproducible configuration in the sweeps. Quantization is kept for the WASM fallback, where it is the only lever left and the download saving is real regardless of what latency does.
 
 The status bar names the configuration actually in use.
 

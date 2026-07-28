@@ -62,8 +62,10 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
             Every configuration runs the same image, threshold, warm-up and run count, and is scored
             against the full-precision WASM reference so speed is never reported without a quality
             guardrail. Agreement is measured on the image currently loaded, over a handful of boxes,
-            so treat it as a pass or fail signal rather than a precise ranking. FrameKind itself runs
-            the fastest configuration that reproduces the reference detections exactly.
+            so treat it as a pass or fail signal rather than a precise ranking. Compare median against
+            p95 before trusting any gap: the CPU path in particular moves with whatever else the
+            machine is doing. FrameKind itself runs the fastest configuration that reproduces the
+            reference detections exactly.
           </p>
         </div>
         <div className="benchmark-actions">
@@ -97,6 +99,7 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
                 <th scope="col">Weights</th>
                 <th scope="col">Load</th>
                 <th scope="col">Median</th>
+                <th scope="col">p95</th>
                 <th scope="col">Agreement</th>
               </tr>
             </thead>
@@ -111,6 +114,7 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
                   <td>{entry.error ? "n/a" : formatBytes(entry.weightBytes)}</td>
                   <td>{formatMs(entry.loadMs)}</td>
                   <td>{entry.error ? <span className="sweep-error">{entry.error}</span> : formatMs(entry.medianMs)}</td>
+                  <td>{entry.error ? "n/a" : formatMs(entry.p95Ms)}</td>
                   <td>{formatAgreement(entry)}</td>
                 </tr>
               ))}

@@ -11,7 +11,10 @@ import { useInferenceWorker } from "./hooks/useInferenceWorker";
 import { generateAltText } from "./lib/caption";
 import type { Detection, SweepResult } from "./types";
 
-const SWEEP_RUNS = 3;
+// Three runs proved too few: on a loaded laptop the WASM medians moved by more
+// than the differences being measured. Five is the smallest count that made the
+// ranking stable across repeat sweeps here.
+const SWEEP_RUNS = 5;
 
 const SAMPLE_IMAGE = `${import.meta.env.BASE_URL}sample-street.png`;
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
