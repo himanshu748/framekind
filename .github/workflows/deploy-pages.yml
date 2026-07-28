@@ -1,4 +1,9 @@
-name: Deploy live demo to GitHub Pages
+name: Redirect the GitHub Pages mirror
+
+# GitHub Pages cannot send Cross-Origin-Opener-Policy or Cross-Origin-Embedder-Policy,
+# so a build served from here would lose crossOriginIsolated and fall back to a single
+# WASM thread. The mirror therefore redirects to the isolation-enabled host instead of
+# serving a slower copy of the app.
 
 on:
   push:
@@ -15,31 +20,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  redirect:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Test
-        run: npm test
-      - name: Build for project site
-        run: npm run build -- --base /framekind/
+      - name: Build the redirect
+        run: |
+          mkdir -p site
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <title>FrameKind has moved</title>
+              <meta http-equiv="refresh" content="0; url=https://framekind-ai.netlify.app/" />
+              <link rel="canonical" href="https://framekind-ai.netlify.app/" />
+            </head>
+            <body>
+              <p>
+                FrameKind runs at
+                <a href="https://framekind-ai.netlify.app/">framekind-ai.netlify.app</a>, which sends the
+                cross-origin isolation headers the multi-threaded WASM backend needs.
+              </p>
+            </body>
+          </html>
+          HTML
       - name: Configure Pages
         uses: actions/configure-pages@v6
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: site
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v5
