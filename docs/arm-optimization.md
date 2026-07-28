@@ -59,6 +59,14 @@ Input resolution is deliberately left out of the default. It is the largest leve
 
 Each of these is a rerun of the sweep, not a rewrite of the app, which is the point of shipping the benchmark rather than its output.
 
+## One thing that did not work
+
+The agreement metric is coarse: this image yields four boxes above the 0.5 threshold, so a single mismatch moves the score by 25 points, and the non-monotonic 67% at 384px against 86% at 256px is almost certainly that coarseness rather than a real quality inversion.
+
+The obvious cheap fix is to score agreement on a lower confidence threshold, comparing many marginal boxes instead of four confident ones. It does not work. Scored at 0.25 and again at 0.05, YOLOS Tiny returned the same four boxes on this image, so the metric gained no resolution and the agreement column did not move. The reason is structural: the model has 100 detection tokens and almost all of them confidently predict the no-object class, so there is no population of borderline boxes to recruit. Lowering the threshold recruits nothing.
+
+The extra scoring pass was removed rather than left in, since it cost one full inference per configuration and bought no resolution. What survives is the box count shown beside the reference row, which makes the sample size visible: it is the number that revealed the idea had failed. The real fix is more images, which is why it heads the next-steps list rather than a threshold change.
+
 ## Limits of this analysis
 
 The cost model counts multiply-accumulates in the transformer encoder. It does not model the patch embedding convolution, layer norms, softmax, the detection heads, or memory bandwidth, and it assumes the runtime achieves similar utilisation across configurations. The attribution of the null quantization result to missing Arm INT8 instructions rests on the shipped runtime artifacts and the open upstream issue rather than on a disassembly of the wasm binary or a per-operator profile. A per-op profile on a device with and without `i8mm` would settle it directly and is the obvious next experiment.

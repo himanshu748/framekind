@@ -17,7 +17,7 @@ function formatMs(value?: number) {
 
 function formatAgreement(entry: SweepEntry) {
   if (entry.error || entry.agreement === undefined) return "n/a";
-  if (entry.isReference) return "reference";
+  if (entry.isReference) return `reference, ${entry.detectionCount ?? 0} boxes`;
   return `${Math.round(entry.agreement * 100)}%`;
 }
 
@@ -64,9 +64,10 @@ export function BenchmarkPanel({ result, isRunning, disabled, progress, onRun }:
             guardrail. Rounds are interleaved across configurations, so background load and thermal
             drift hit every row rather than whichever one held the slow window, and ranking uses each
             configuration's best round because noise only ever adds time. A wide gap between best and
-            p95 means the machine was busy, not that the configuration is erratic. Agreement is
-            measured on the image currently loaded, over a handful of boxes, so treat it as a pass or
-            fail signal rather than a precise ranking.
+            p95 means the machine was busy, not that the configuration is erratic. Agreement is scored
+            against the reference on this image alone, and the box count next to it is the sample
+            size: at four boxes a single mismatch moves the score by 25 points, so read it as a pass
+            or fail signal rather than a precise ranking.
           </p>
         </div>
         <div className="benchmark-actions">

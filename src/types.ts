@@ -61,6 +61,7 @@ export interface SweepResult {
   imageHeight: number;
   runsPerConfig: number;
   interleaved: true;
+  threshold: number;
   completedAt: string;
 }
 

@@ -219,6 +219,7 @@ async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
       imageHeight: request.imageHeight,
       runsPerConfig: request.runs,
       interleaved: true,
+      threshold: THRESHOLD,
       completedAt: new Date().toISOString(),
     } satisfies SweepResult,
   });
