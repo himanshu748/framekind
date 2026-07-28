@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-  BenchmarkResult,
+  DeviceCapabilities,
   InferenceResult,
-  ModelDType,
+  RunConfig,
+  SweepResult,
   WorkerRequest,
   WorkerResponse,
 } from "../types";
 
-type PendingValue = InferenceResult | BenchmarkResult;
+type PendingValue = InferenceResult | SweepResult;
 
 interface PendingRequest {
   resolve: (value: PendingValue) => void;
@@ -23,6 +24,8 @@ export function useInferenceWorker() {
   const workerRef = useRef<Worker | null>(null);
   const pendingRef = useRef(new Map<string, PendingRequest>());
   const [progress, setProgress] = useState<WorkerProgress>({ stage: "Idle" });
+  const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null);
+  const [activeConfig, setActiveConfig] = useState<RunConfig | null>(null);
 
   useEffect(() => {
     const worker = new Worker(new URL("../ai.worker.ts", import.meta.url), { type: "module" });
@@ -30,6 +33,11 @@ export function useInferenceWorker() {
 
     worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
       const message = event.data;
+      if (message.type === "capabilities") {
+        setCapabilities(message.capabilities);
+        setActiveConfig(message.active);
+        return;
+      }
       if (message.type === "progress") {
         setProgress({ stage: message.stage, progress: message.progress });
         return;
@@ -71,22 +79,29 @@ export function useInferenceWorker() {
   }, []);
 
   const detect = useCallback(
-    async (imageUrl: string, dtype: ModelDType = "uint8") => {
+    async (imageUrl: string) => {
       const requestId = crypto.randomUUID();
-      const result = await dispatch({ type: "detect", requestId, imageUrl, dtype });
+      const result = await dispatch({ type: "detect", requestId, imageUrl });
       return result as InferenceResult;
     },
     [dispatch],
   );
 
-  const benchmark = useCallback(
-    async (imageUrl: string, runs = 5) => {
+  const sweep = useCallback(
+    async (imageUrl: string, imageWidth: number, imageHeight: number, runs = 5) => {
       const requestId = crypto.randomUUID();
-      const result = await dispatch({ type: "benchmark", requestId, imageUrl, runs });
-      return result as BenchmarkResult;
+      const result = await dispatch({
+        type: "sweep",
+        requestId,
+        imageUrl,
+        imageWidth,
+        imageHeight,
+        runs,
+      });
+      return result as SweepResult;
     },
     [dispatch],
   );
 
-  return { detect, benchmark, progress };
+  return { detect, sweep, progress, capabilities, activeConfig };
 }

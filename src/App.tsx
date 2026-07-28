@@ -9,7 +9,9 @@ import { MethodSection } from "./components/MethodSection";
 import { StatusBar } from "./components/StatusBar";
 import { useInferenceWorker } from "./hooks/useInferenceWorker";
 import { generateAltText } from "./lib/caption";
-import type { BenchmarkResult, Detection } from "./types";
+import type { Detection, SweepResult } from "./types";
+
+const SWEEP_RUNS = 3;
 
 const SAMPLE_IMAGE = `${import.meta.env.BASE_URL}sample-street.png`;
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -28,7 +30,7 @@ export default function App() {
   const processedRef = useRef("");
   const copyTimerRef = useRef<number | null>(null);
   const analysisGenerationRef = useRef(0);
-  const { detect, benchmark, progress } = useInferenceWorker();
+  const { detect, sweep, progress, activeConfig } = useInferenceWorker();
   const [imageUrl, setImageUrl] = useState(SAMPLE_IMAGE);
   const [imageKey, setImageKey] = useState(0);
   const [naturalSize, setNaturalSize] = useState({ width: 1448, height: 1086 });
@@ -37,7 +39,7 @@ export default function App() {
   const [showBoxes, setShowBoxes] = useState(true);
   const [isProcessing, setIsProcessing] = useState(true);
   const [isBenchmarking, setIsBenchmarking] = useState(false);
-  const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResult | null>(null);
+  const [sweepResult, setSweepResult] = useState<SweepResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [modelReady, setModelReady] = useState(false);
@@ -49,7 +51,7 @@ export default function App() {
     setImageKey((value) => value + 1);
     setDetections([]);
     setDraft("");
-    setBenchmarkResult(null);
+    setSweepResult(null);
     setError("");
     setIsProcessing(true);
   }, []);
@@ -59,7 +61,7 @@ export default function App() {
     setIsProcessing(true);
     setError("");
     try {
-      const result = await detect(url, "uint8");
+      const result = await detect(url);
       if (generation !== analysisGenerationRef.current) return;
       const sorted = [...result.detections].sort((a, b) => b.score - a.score);
       setDetections(sorted);
@@ -124,23 +126,23 @@ export default function App() {
     }
   }, [draft]);
 
-  const handleBenchmark = useCallback(async () => {
+  const handleSweep = useCallback(async () => {
     if (isProcessing || isBenchmarking) return;
     const generation = analysisGenerationRef.current;
     setIsBenchmarking(true);
     setError("");
     try {
-      const result = await benchmark(imageUrl, 5);
+      const result = await sweep(imageUrl, naturalSize.width, naturalSize.height, SWEEP_RUNS);
       if (generation !== analysisGenerationRef.current) return;
-      setBenchmarkResult(result);
+      setSweepResult(result);
       setModelReady(true);
     } catch (reason) {
       if (generation !== analysisGenerationRef.current) return;
-      setError(reason instanceof Error ? reason.message : "The benchmark did not finish.");
+      setError(reason instanceof Error ? reason.message : "The sweep did not finish.");
     } finally {
       if (generation === analysisGenerationRef.current) setIsBenchmarking(false);
     }
-  }, [benchmark, imageUrl, isBenchmarking, isProcessing]);
+  }, [imageUrl, isBenchmarking, isProcessing, naturalSize.height, naturalSize.width, sweep]);
 
   return (
     <div className="app-shell">
@@ -177,15 +179,15 @@ export default function App() {
           />
         </div>
         <BenchmarkPanel
-          result={benchmarkResult}
+          result={sweepResult}
           isRunning={isBenchmarking}
           disabled={isProcessing}
           progress={progress}
-          onRun={handleBenchmark}
+          onRun={handleSweep}
         />
         <MethodSection />
       </main>
-      <StatusBar ready={modelReady} />
+      <StatusBar ready={modelReady} activeConfig={activeConfig} />
     </div>
   );
 }

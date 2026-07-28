@@ -2,30 +2,27 @@
 
 import { env, pipeline } from "@huggingface/transformers";
 import { detectionAgreement, percentile } from "./lib/benchmark";
+import { NATIVE_SHORTEST_EDGE, detectCapabilities, preferredConfig } from "./lib/device";
+import { sweepPlan } from "./lib/sweep";
+import { measureWeightBytes } from "./lib/weights";
 import type {
-  BenchmarkResult,
   Detection,
-  ModelBenchmark,
-  ModelDType,
+  DeviceCapabilities,
+  RunConfig,
+  SweepEntry,
+  SweepResult,
   WorkerRequest,
   WorkerResponse,
 } from "./types";
 
 const MODEL_ID = "Xenova/yolos-tiny";
 const MODEL_REVISION = "e2f9c7673f0fa61849efe2b56a0d7774779ebb9d";
-const MODEL_WEIGHT_MB: Record<ModelDType, number> = {
-  fp32: 26.2,
-  uint8: 9.51,
-};
+const THRESHOLD = 0.5;
 
 type Detector = {
   (imageUrl: string, options: { threshold: number }): Promise<Detection[]>;
   dispose: () => Promise<void> | void;
-};
-
-type LoadedDetector = {
-  detector: Detector;
-  loadMs: number;
+  processor?: { image_processor?: { size?: Record<string, number> } };
 };
 
 const workerScope = self as DedicatedWorkerGlobalScope;
@@ -33,16 +30,10 @@ const workerScope = self as DedicatedWorkerGlobalScope;
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-const availableThreads = Math.max(1, navigator.hardwareConcurrency || 1);
-const wasmBackend = env.backends.onnx.wasm;
-if (wasmBackend) {
-  wasmBackend.numThreads = crossOriginIsolated
-    ? Math.min(4, Math.max(2, Math.floor(availableThreads / 2)))
-    : 1;
-}
-
-let optimizedDetector: Detector | null = null;
-let optimizedLoadMs = 0;
+let capabilities: DeviceCapabilities | null = null;
+let activeConfig: RunConfig | null = null;
+let activeDetector: Detector | null = null;
+let activeLoadMs = 0;
 
 function send(message: WorkerResponse) {
   workerScope.postMessage(message);
@@ -61,145 +52,158 @@ function progressReporter(requestId: string, prefix: string) {
   };
 }
 
-async function loadDetector(
-  dtype: ModelDType,
-  requestId: string,
-  prefix: string,
-): Promise<LoadedDetector> {
-  const startedAt = performance.now();
-  const created = await pipeline("object-detection", MODEL_ID, {
-    revision: MODEL_REVISION,
-    dtype,
-    device: "wasm",
-    progress_callback: progressReporter(requestId, prefix),
-  });
-  return {
-    detector: created as unknown as Detector,
-    loadMs: performance.now() - startedAt,
-  };
+async function ensureReady() {
+  if (!capabilities || !activeConfig) {
+    capabilities = await detectCapabilities();
+    const wasmBackend = env.backends.onnx.wasm;
+    if (wasmBackend) wasmBackend.numThreads = capabilities.wasmThreads;
+    activeConfig = preferredConfig(capabilities);
+    send({ type: "capabilities", capabilities, active: activeConfig });
+  }
+  return { capabilities, activeConfig };
 }
 
-async function getOptimizedDetector(requestId: string) {
-  if (!optimizedDetector) {
-    const loaded = await loadDetector("uint8", requestId, "Preparing optimized model");
-    optimizedDetector = loaded.detector;
-    optimizedLoadMs = loaded.loadMs;
+async function loadDetector(config: RunConfig, requestId: string, prefix: string) {
+  const startedAt = performance.now();
+  const detector = (await pipeline("object-detection", MODEL_ID, {
+    revision: MODEL_REVISION,
+    dtype: config.dtype,
+    device: config.device,
+    progress_callback: progressReporter(requestId, prefix),
+  })) as unknown as Detector;
+
+  if (config.shortestEdge !== NATIVE_SHORTEST_EDGE) {
+    const imageProcessor = detector.processor?.image_processor;
+    if (!imageProcessor) throw new Error("This build cannot override the input resolution.");
+    imageProcessor.size = {
+      shortest_edge: config.shortestEdge,
+      longest_edge: Math.round(config.shortestEdge * 2.6),
+    };
   }
-  return { detector: optimizedDetector, loadMs: optimizedLoadMs };
+
+  return { detector, loadMs: performance.now() - startedAt };
+}
+
+async function getActiveDetector(requestId: string) {
+  const { activeConfig: config } = await ensureReady();
+  if (!activeDetector) {
+    const loaded = await loadDetector(config, requestId, "Preparing on-device model");
+    activeDetector = loaded.detector;
+    activeLoadMs = loaded.loadMs;
+  }
+  return { detector: activeDetector, loadMs: activeLoadMs, config };
+}
+
+async function releaseActiveDetector() {
+  if (!activeDetector) return;
+  await activeDetector.dispose();
+  activeDetector = null;
+  activeLoadMs = 0;
 }
 
 async function runDetection(request: Extract<WorkerRequest, { type: "detect" }>) {
-  const loaded = request.dtype === "uint8"
-    ? await getOptimizedDetector(request.requestId)
-    : await loadDetector("fp32", request.requestId, "Preparing full-precision model");
+  const { detector, loadMs, config } = await getActiveDetector(request.requestId);
 
   send({ type: "progress", requestId: request.requestId, stage: "Running local inference" });
   const startedAt = performance.now();
-  const detections = await loaded.detector(request.imageUrl, { threshold: 0.5 });
+  const detections = await detector(request.imageUrl, { threshold: THRESHOLD });
   const inferenceMs = performance.now() - startedAt;
-
-  if (request.dtype === "fp32") {
-    await loaded.detector.dispose();
-  }
 
   send({
     type: "detect-result",
     requestId: request.requestId,
-    result: {
-      detections,
-      inferenceMs,
-      modelLoadMs: loaded.loadMs,
-      dtype: request.dtype,
-    },
+    result: { detections, inferenceMs, modelLoadMs: loadMs, config },
   });
 }
 
-async function disposeOptimizedDetector() {
-  if (!optimizedDetector) return;
-  await optimizedDetector.dispose();
-  optimizedDetector = null;
-  optimizedLoadMs = 0;
-}
-
-async function prepareWarmCache(dtype: ModelDType, requestId: string) {
-  const loaded = await loadDetector(dtype, requestId, `Caching ${dtype.toUpperCase()} weights`);
-  await loaded.detector.dispose();
-}
-
-async function measureModel(
-  dtype: ModelDType,
+async function measureConfig(
+  planned: ReturnType<typeof sweepPlan>[number],
   requestId: string,
   imageUrl: string,
   runs: number,
-): Promise<ModelBenchmark> {
-  const loaded = await loadDetector(dtype, requestId, `Starting ${dtype.toUpperCase()} session`);
-  send({ type: "progress", requestId, stage: `Warming up ${dtype.toUpperCase()} inference` });
-  await loaded.detector(imageUrl, { threshold: 0.5 });
-
-  const runsMs: number[] = [];
-  let detections: Detection[] = [];
-  for (let index = 0; index < runs; index += 1) {
-    send({
-      type: "progress",
-      requestId,
-      stage: `${dtype.toUpperCase()} measured run ${index + 1} of ${runs}`,
-      progress: ((index + 1) / runs) * 100,
-    });
-    const startedAt = performance.now();
-    detections = await loaded.detector(imageUrl, { threshold: 0.5 });
-    runsMs.push(performance.now() - startedAt);
-  }
-
-  if (dtype === "uint8") {
-    optimizedDetector = loaded.detector;
-    optimizedLoadMs = loaded.loadMs;
-  } else {
-    await loaded.detector.dispose();
-  }
-
-  return {
-    dtype,
-    weightMb: MODEL_WEIGHT_MB[dtype],
-    loadMs: loaded.loadMs,
-    runsMs,
-    medianMs: percentile(runsMs, 0.5),
-    p95Ms: percentile(runsMs, 0.95),
-    detections,
+  reference: Detection[] | null,
+): Promise<{ entry: SweepEntry; detections: Detection[] }> {
+  const entry: SweepEntry = {
+    id: planned.id,
+    label: planned.label,
+    device: planned.device,
+    dtype: planned.dtype,
+    shortestEdge: planned.shortestEdge,
+    isReference: planned.isReference,
   };
+
+  let detector: Detector | null = null;
+  try {
+    const loaded = await loadDetector(planned, requestId, `Starting ${planned.label}`);
+    detector = loaded.detector;
+    entry.loadMs = loaded.loadMs;
+    entry.weightBytes = await measureWeightBytes(planned.dtype);
+
+    send({ type: "progress", requestId, stage: `Warming up ${planned.label}` });
+    await detector(imageUrl, { threshold: THRESHOLD });
+
+    const runsMs: number[] = [];
+    let detections: Detection[] = [];
+    for (let index = 0; index < runs; index += 1) {
+      send({
+        type: "progress",
+        requestId,
+        stage: `${planned.label}: run ${index + 1} of ${runs}`,
+        progress: ((index + 1) / runs) * 100,
+      });
+      const startedAt = performance.now();
+      detections = await detector(imageUrl, { threshold: THRESHOLD });
+      runsMs.push(performance.now() - startedAt);
+    }
+
+    entry.runsMs = runsMs;
+    entry.medianMs = percentile(runsMs, 0.5);
+    entry.p95Ms = percentile(runsMs, 0.95);
+    entry.detectionCount = detections.length;
+    entry.agreement = reference === null ? 1 : detectionAgreement(reference, detections);
+    return { entry, detections };
+  } catch (error) {
+    entry.error = error instanceof Error ? error.message : "This configuration did not run.";
+    return { entry, detections: [] };
+  } finally {
+    if (detector) await detector.dispose();
+  }
 }
 
-async function runBenchmark(request: Extract<WorkerRequest, { type: "benchmark" }>) {
-  await disposeOptimizedDetector();
+async function runSweep(request: Extract<WorkerRequest, { type: "sweep" }>) {
+  const { capabilities: caps } = await ensureReady();
+  await releaseActiveDetector();
+
+  const planned = sweepPlan(caps);
+  const entries: SweepEntry[] = [];
+  let reference: Detection[] | null = null;
+
+  for (const config of planned) {
+    const { entry, detections } = await measureConfig(
+      config,
+      request.requestId,
+      request.imageUrl,
+      request.runs,
+      config.isReference ? null : reference,
+    );
+    if (config.isReference && !entry.error) reference = detections;
+    entries.push(entry);
+  }
 
   send({
-    type: "progress",
+    type: "sweep-result",
     requestId: request.requestId,
-    stage: "Preparing a fair warm-cache comparison",
+    result: {
+      entries,
+      referenceId: planned.find((config) => config.isReference)?.id ?? planned[0].id,
+      capabilities: caps,
+      userAgent: navigator.userAgent,
+      imageWidth: request.imageWidth,
+      imageHeight: request.imageHeight,
+      runsPerConfig: request.runs,
+      completedAt: new Date().toISOString(),
+    } satisfies SweepResult,
   });
-  await prepareWarmCache("fp32", request.requestId);
-  await prepareWarmCache("uint8", request.requestId);
-
-  const fp32 = await measureModel(
-    "fp32",
-    request.requestId,
-    request.imageUrl,
-    request.runs,
-  );
-  const uint8 = await measureModel(
-    "uint8",
-    request.requestId,
-    request.imageUrl,
-    request.runs,
-  );
-
-  const result: BenchmarkResult = {
-    fp32,
-    uint8,
-    labelAgreement: detectionAgreement(fp32.detections, uint8.detections),
-    completedAt: new Date().toISOString(),
-  };
-
-  send({ type: "benchmark-result", requestId: request.requestId, result });
 }
 
 let taskQueue = Promise.resolve();
@@ -207,11 +211,13 @@ let taskQueue = Promise.resolve();
 workerScope.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
   taskQueue = taskQueue
-    .then(() => (request.type === "detect" ? runDetection(request) : runBenchmark(request)))
+    .then(() => (request.type === "detect" ? runDetection(request) : runSweep(request)))
     .catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "The local model could not complete this request.";
       send({ type: "error", requestId: request.requestId, message });
     });
 });
+
+void ensureReady();
 
 export {};
