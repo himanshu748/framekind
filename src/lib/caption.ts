@@ -7,6 +7,35 @@ const IRREGULAR_PLURALS: Record<string, string> = {
 };
 
 const VOWEL_SOUND_EXCEPTIONS = new Set(["hour", "honor"]);
+const DUPLICATE_OVERLAP_THRESHOLD = 0.8;
+
+function intersectionOverUnion(a: Detection["box"], b: Detection["box"]) {
+  const left = Math.max(a.xmin, b.xmin);
+  const top = Math.max(a.ymin, b.ymin);
+  const right = Math.min(a.xmax, b.xmax);
+  const bottom = Math.min(a.ymax, b.ymax);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  const areaA = Math.max(0, a.xmax - a.xmin) * Math.max(0, a.ymax - a.ymin);
+  const areaB = Math.max(0, b.xmax - b.xmin) * Math.max(0, b.ymax - b.ymin);
+  const union = areaA + areaB - intersection;
+  return union <= 0 ? 0 : intersection / union;
+}
+
+export function suppressDuplicateDetections(detections: Detection[]) {
+  const kept: Detection[] = [];
+  const ranked = [...detections].sort((a, b) => b.score - a.score);
+
+  for (const detection of ranked) {
+    const duplicate = kept.some(
+      (candidate) =>
+        candidate.label === detection.label
+        && intersectionOverUnion(candidate.box, detection.box) >= DUPLICATE_OVERLAP_THRESHOLD,
+    );
+    if (!duplicate) kept.push(detection);
+  }
+
+  return kept;
+}
 
 function pluralize(label: string, count: number) {
   if (count === 1) return label;
@@ -47,7 +76,7 @@ export function generateAltText(
   imageWidth: number,
   maxLabels = 5,
 ) {
-  const relevant = detections
+  const relevant = suppressDuplicateDetections(detections)
     .filter((item) => item.score >= 0.5)
     .sort((a, b) => b.score - a.score)
     .slice(0, 12);

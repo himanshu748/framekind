@@ -15,8 +15,8 @@ export function MethodSection() {
           <dd>WebGPU and WASM, whichever this browser exposes, selected at runtime.</dd>
         </div>
         <div>
-          <dt>Every precision</dt>
-          <dd>FP32, FP16, UINT8 and Q4 from one pinned checkpoint, plus an input-resolution ladder.</dd>
+          <dt>Precision variants</dt>
+          <dd>FP32, FP16 and UINT8 from one pinned checkpoint, plus an input-resolution ladder.</dd>
         </div>
         <div>
           <dt>Same conditions</dt>

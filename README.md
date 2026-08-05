@@ -70,7 +70,7 @@ The status bar names the configuration actually in use.
 
 React keeps interaction and review on the main thread. A dedicated Web Worker owns backend selection, model loading, ONNX Runtime Web inference, model disposal, and sweep timing.
 
-The draft generator is deliberately deterministic. It groups detections above the confidence threshold, adds quantities and left/center/right position, and avoids claims the detector did not establish.
+The draft generator is deliberately deterministic. It suppresses near-identical boxes for the same object, groups detections above the confidence threshold, adds quantities and left/center/right position, and avoids claims the detector did not establish.
 
 ## Run it
 

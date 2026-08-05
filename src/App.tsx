@@ -8,7 +8,7 @@ import { ImageWorkbench } from "./components/ImageWorkbench";
 import { MethodSection } from "./components/MethodSection";
 import { StatusBar } from "./components/StatusBar";
 import { useInferenceWorker } from "./hooks/useInferenceWorker";
-import { generateAltText } from "./lib/caption";
+import { generateAltText, suppressDuplicateDetections } from "./lib/caption";
 import type { Detection, SweepResult } from "./types";
 
 // Three runs proved too few: on a loaded laptop the WASM medians moved by more
@@ -68,7 +68,7 @@ export default function App() {
     try {
       const result = await detect(url);
       if (generation !== analysisGenerationRef.current) return;
-      const sorted = [...result.detections].sort((a, b) => b.score - a.score);
+      const sorted = suppressDuplicateDetections(result.detections);
       setDetections(sorted);
       setDraft(generateAltText(sorted, width));
       setModelReady(true);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateAltText } from "./caption";
+import { generateAltText, suppressDuplicateDetections } from "./caption";
 
 describe("generateAltText", () => {
   it("describes unique objects and their horizontal positions", () => {
@@ -45,5 +45,62 @@ describe("generateAltText", () => {
     );
 
     expect(text).toBe("2 people are visible.");
+  });
+
+  it("does not count near-identical boxes for the same object twice", () => {
+    const text = generateAltText(
+      [
+        {
+          label: "potted plant",
+          score: 0.59,
+          box: { xmin: 280, ymin: 0, xmax: 554, ymax: 352 },
+        },
+        {
+          label: "potted plant",
+          score: 0.58,
+          box: { xmin: 274, ymin: 0, xmax: 584, ymax: 365 },
+        },
+      ],
+      800,
+    );
+
+    expect(text).toBe("A potted plant is visible. The potted plant is near the center.");
+  });
+});
+
+describe("suppressDuplicateDetections", () => {
+  const detection = (
+    label: string,
+    score: number,
+    xmax: number,
+  ) => ({
+    label,
+    score,
+    box: { xmin: 0, ymin: 0, xmax, ymax: 10 },
+  });
+
+  it("keeps the higher-confidence box when same-label overlap reaches the boundary", () => {
+    const lowerScore = detection("potted plant", 0.58, 8);
+    const higherScore = detection("potted plant", 0.59, 10);
+
+    expect(suppressDuplicateDetections([lowerScore, higherScore])).toEqual([higherScore]);
+  });
+
+  it("keeps distinct same-label objects below the overlap boundary", () => {
+    const detections = [
+      detection("person", 0.92, 10),
+      detection("person", 0.88, 7.9),
+    ];
+
+    expect(suppressDuplicateDetections(detections)).toEqual(detections);
+  });
+
+  it("keeps different labels even when their boxes are identical", () => {
+    const detections = [
+      detection("person", 0.92, 10),
+      detection("bicycle", 0.88, 10),
+    ];
+
+    expect(suppressDuplicateDetections(detections)).toEqual(detections);
   });
 });
