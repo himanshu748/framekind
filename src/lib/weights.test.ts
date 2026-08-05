@@ -11,8 +11,8 @@ describe("weightFileName", () => {
 });
 
 describe("formatBytes", () => {
-  it("reports megabytes to two decimals", () => {
-    expect(formatBytes(26227993)).toBe("25.01 MB");
+  it("reports mebibytes to two decimals", () => {
+    expect(formatBytes(26227993)).toBe("25.01 MiB");
   });
 
   it("says so rather than guessing when the size is unknown", () => {

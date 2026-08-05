@@ -48,5 +48,5 @@ export async function measureWeightBytes(dtype: ModelDType) {
 
 export function formatBytes(bytes?: number) {
   if (bytes === undefined) return "not measured";
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
 }

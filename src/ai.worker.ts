@@ -147,7 +147,7 @@ function candidateFor(planned: ReturnType<typeof sweepPlan>[number]): Candidate 
  * the per-config minimum then survives as the least contaminated estimate.
  *
  * Exactly one session is resident at a time. Holding all of them open would
- * interleave without reloading, but that is roughly 105 MB of weights plus seven
+ * interleave without reloading, but that is roughly 105 MiB of weights plus seven
  * runtime arenas, which a 16 GB laptop feels and a phone cannot survive. Paying a
  * cached reload and a warm-up per measurement is the cost of bounding the sweep
  * to the memory the product itself uses.

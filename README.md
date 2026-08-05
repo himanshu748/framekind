@@ -28,13 +28,13 @@ Chrome 150 on Apple Silicon, cross-origin isolated, 4 WASM threads, weights pre-
 
 | Configuration | Weights | Best | Median | p95 | Versus reference | Agreement |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| WASM · FP32 (reference) | 25.01 MB | 2,969 ms | 3,432 ms | 3,624 ms | 1.00× | reference |
-| WASM · UINT8 | 9.07 MB | 3,143 ms | 3,268 ms | 3,456 ms | 0.94× | 86% |
-| WASM · UINT8 @384px | 9.07 MB | 1,123 ms | 1,274 ms | 1,319 ms | 2.64× | 67% |
-| WASM · UINT8 @256px | 9.07 MB | 366 ms | 411 ms | 429 ms | 8.11× | 86% |
-| WebGPU · FP32 | 25.01 MB | 1,240 ms | 1,430 ms | 1,583 ms | 2.39× | 100% |
-| WebGPU · FP16 | 12.72 MB | 634 ms | 731 ms | 916 ms | 4.68× | 75% |
-| WebGPU · UINT8 | 9.07 MB | 1,596 ms | 1,713 ms | 1,722 ms | 1.86× | 0% |
+| WASM · FP32 (reference) | 25.01 MiB | 2,969 ms | 3,432 ms | 3,624 ms | 1.00× | reference |
+| WASM · UINT8 | 9.07 MiB | 3,143 ms | 3,268 ms | 3,456 ms | 0.94× | 86% |
+| WASM · UINT8 @384px | 9.07 MiB | 1,123 ms | 1,274 ms | 1,319 ms | 2.64× | 67% |
+| WASM · UINT8 @256px | 9.07 MiB | 366 ms | 411 ms | 429 ms | 8.11× | 86% |
+| WebGPU · FP32 | 25.01 MiB | 1,240 ms | 1,430 ms | 1,583 ms | 2.39× | 100% |
+| WebGPU · FP16 | 12.72 MiB | 634 ms | 731 ms | 916 ms | 4.68× | 75% |
+| WebGPU · UINT8 | 9.07 MiB | 1,596 ms | 1,713 ms | 1,722 ms | 1.86× | 0% |
 
 Ratios are computed on best-round times. Weight sizes are the bytes this device actually fetched, read back from the Cache API, not constants written into the source.
 
@@ -95,7 +95,7 @@ npm run preview
 
 1. Detect the backends this browser exposes, and set WASM threads from `crossOriginIsolated` and core count.
 2. Run five interleaved rounds, taking one timed run per configuration per round, so drift is shared rather than charged to whichever configuration held the slow window.
-3. Keep exactly one session resident: load from cache, warm with an untimed run, take the timed run, dispose. Holding all seven open would avoid the reloads, but that is roughly 105 MB of weights plus seven runtime arenas, which a 16 GB laptop feels and a phone cannot survive. The sweep costs what the product costs.
+3. Keep exactly one session resident: load from cache, warm with an untimed run, take the timed run, dispose. Holding all seven open would avoid the reloads, but that is roughly 105 MiB of weights plus seven runtime arenas, which a 16 GB laptop feels and a phone cannot survive. The sweep costs what the product costs.
 4. Score every configuration against the full-precision WASM reference: identical label plus bounding-box intersection-over-union of at least 0.5, then a symmetric match rate across both prediction sets.
 5. Read each variant's weight size back from the browser cache.
 6. Rank on each configuration's best round, report best, median and p95 together, and export every raw run as JSON.
